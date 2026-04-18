@@ -1,0 +1,64 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Tutorial dependencies for: Mass-Parallelized Compliance on Cloud TPU
+#
+# Install with uv:
+#   uv venv --python 3.12
+#   uv pip install -e .
+#
+# The tutorial targets Python 3.12 with vllm-tpu (the TPU-specific vLLM
+# distribution, distinct from the CUDA/GPU 'vllm' package on PyPI).
+# ──────────────────────────────────────────────────────────────────────────────
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "compliance-at-scale-tpu"
+version = "0.1.0"
+description = "Tutorial: Mass-Parallelized RAI Compliance Checks with vLLM Batch Inference on Cloud TPU"
+readme = "README.md"
+authors = [{ name = "Noble Ackerson", email = "noblel@byteanatom.com" }]
+license = { text = "Apache-2.0" }
+requires-python = ">=3.12"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    # TPU-specific vLLM package. Do NOT swap this for 'vllm' (that is the GPU build).
+    "vllm-tpu>=0.8.0",
+
+    # CLI UX: tables, progress bars, formatted panels
+    "rich>=13.9.0",
+
+    # Async HTTP client for the concurrent online-server demo (Module 3)
+    "httpx>=0.27.0",
+
+    # OpenAI-compatible Python client, used against vLLM's built-in server
+    "openai>=1.50.0",
+
+    # YAML output for rai-checklist-cli report compatibility (Module 4)
+    "pyyaml>=6.0",
+
+    # The rai-checklist-cli project the tutorial uses as a case study
+    "rai-checklist-cli>=0.7.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.7.0",
+    "mypy>=1.12.0",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]

@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-compile:
+    name: Lint + static checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: pip install ruff==0.7.0
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: Byte-compile all module scripts
+        # We compile instead of running because the scripts require TPU hardware.
+        # py_compile catches syntax errors and obvious import problems without
+        # needing a vllm-tpu installation in CI.
+        run: |
+          python -m py_compile \
+            01_setup/verify_install.py \
+            02_offline_batch/batch_rai_eval.py \
+            03_online_server/client_single.py \
+            03_online_server/client_concurrent.py \
+            04_integration_demo/integration_demo.py
+
+      - name: Shellcheck on bash scripts
+        uses: ludeeus/action-shellcheck@2.0.0
+        with:
+          scandir: "."
+          severity: warning
+
+      - name: Validate Jupyter notebooks are parseable JSON
+        run: |
+          python -c "
+          import json, pathlib
+          for p in pathlib.Path('notebooks').glob('*.ipynb'):
+              with open(p) as f:
+                  nb = json.load(f)
+              assert 'cells' in nb, f'{p} missing cells'
+              print(f'OK {p} ({len(nb[\"cells\"])} cells)')
+          "

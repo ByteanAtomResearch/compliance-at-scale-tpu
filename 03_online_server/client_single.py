@@ -97,11 +97,13 @@ def main(args: argparse.Namespace) -> None:
 
     try:
         parsed = json.loads(raw)
-        console.print(Panel(
-            json.dumps(parsed, indent=2),
-            title="PII Detection Result",
-            border_style="red" if parsed.get("detected") else "green",
-        ))
+        console.print(
+            Panel(
+                json.dumps(parsed, indent=2),
+                title="PII Detection Result",
+                border_style="red" if parsed.get("detected") else "green",
+            )
+        )
     except json.JSONDecodeError:
         console.print(f"[yellow]Raw response (not valid JSON):[/yellow]\n{raw}")
 

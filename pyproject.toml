@@ -58,7 +58,12 @@ dev = [
 
 [tool.ruff]
 target-version = "py312"
-line-length = 100
+line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
+
+# Notebooks get special treatment: they contain inline sample data strings
+# that read better unwrapped. E501 stays enabled on .py files.
+[tool.ruff.lint.per-file-ignores]
+"notebooks/*.ipynb" = ["E501"]

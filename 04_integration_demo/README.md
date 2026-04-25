@@ -1,6 +1,8 @@
 # Module 4: Integration Demo
 
-This module connects the TPU batch evaluator (Module 2) to rai-checklist-cli's existing report formats. It runs a before/after comparison to make the throughput difference tangible.
+This module connects the TPU batch evaluator (Module 2) to [rai-checklist-cli](https://github.com/ByteanAtomResearch/rai-checklist-cli) -- a CLI tool for generating and validating Responsible AI compliance checklists across the ML lifecycle. rai-checklist-cli produces (and consumes) Markdown, YAML, and JSON reports covering stages like data privacy, ethical considerations, and deployment monitoring.
+
+The demo shows the throughput gap between sequential and batch evaluation, then writes results in the exact formats rai-checklist-cli already understands so you can validate them with the existing tool.
 
 ## What it does
 
@@ -30,6 +32,17 @@ python 04_integration_demo/integration_demo.py \
 ```
 
 Add `--skip-sequential` to skip the simulated baseline and just run the TPU evaluation.
+
+## Connecting the output to rai-checklist-cli
+
+After `make demo`, the generated YAML report can be validated directly with rai-checklist-cli:
+
+```bash
+pip install rai-checklist-cli
+rai-checklist validate results/integration/evaluation_report.yaml
+```
+
+The Markdown report follows the same checklist format that `rai-checklist generate -f md` produces, so it can be dropped into any project that already uses rai-checklist-cli for audit trails.
 
 ## This is a demo
 

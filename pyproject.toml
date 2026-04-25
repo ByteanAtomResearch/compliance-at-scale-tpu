@@ -20,7 +20,7 @@ description = "Tutorial: Mass-Parallelized RAI Compliance Checks with vLLM Batch
 readme = "README.md"
 authors = [{ name = "Noble Ackerson", email = "noblel@byteanatom.com" }]
 license = { text = "Apache-2.0" }
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -32,7 +32,9 @@ classifiers = [
 
 dependencies = [
     # TPU-specific vLLM package. Do NOT swap this for 'vllm' (that is the GPU build).
-    "vllm-tpu>=0.8.0",
+    # Pinned to 0.11.x: GuidedDecodingParams was removed in 0.12.0. When upgrading,
+    # verify the import shim in batch_rai_eval.py still works with the new version.
+    "vllm-tpu~=0.11.1",
 
     # CLI UX: tables, progress bars, formatted panels
     "rich>=13.9.0",

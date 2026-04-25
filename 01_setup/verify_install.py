@@ -36,18 +36,16 @@ def check_tpu_chips() -> tuple[bool, str]:
 
 
 def check_jax_backends() -> tuple[bool, str]:
-    """Confirm JAX has a TPU backend registered."""
+    """Confirm JAX is using the TPU backend as its default."""
     try:
         import jax
 
-        backends = jax._src.lib.xla_bridge.backends()
-        backend_names = list(backends.keys())
-        has_tpu = "tpu" in backend_names
-        if has_tpu:
-            return True, f"JAX backends: {backend_names} (TPU backend active)"
-        return False, f"JAX backends: {backend_names} (no TPU backend found)"
+        backend = jax.default_backend()
+        if backend == "tpu":
+            return True, f"JAX default backend: {backend} (TPU backend active)"
+        return False, f"JAX default backend: {backend} (expected 'tpu', got '{backend}')"
     except Exception as exc:
-        return False, f"Could not list JAX backends: {exc}"
+        return False, f"Could not query JAX default backend: {exc}"
 
 
 def check_vllm_tpu_version() -> tuple[bool, str]:

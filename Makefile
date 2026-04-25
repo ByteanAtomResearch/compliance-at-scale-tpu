@@ -3,9 +3,10 @@
 # One-command runners for each tutorial module
 # ──────────────────────────────────────────────────────────────
 
-MODEL ?= google/gemma-4-E4B-it
-DATA  ?= sample_data/llm_outputs.jsonl
-PORT  ?= 8000
+MODEL       ?= google/gemma-4-E4B-it
+DATA        ?= sample_data/llm_outputs.jsonl
+PORT        ?= 8000
+CONCURRENCY ?= 10
 
 .PHONY: help setup verify batch serve client client-concurrent demo clean
 
@@ -38,7 +39,8 @@ client: ## Send a single RAI evaluation request to the running server
 client-concurrent: ## Send concurrent RAI evaluation requests
 	python 03_online_server/client_concurrent.py \
 		--port $(PORT) \
-		--input $(DATA)
+		--input $(DATA) \
+		--concurrency $(CONCURRENCY)
 
 # ── Module 4: Integration Demo ─────────────────────────────
 demo: ## Run end-to-end integration demo with rai-checklist-cli

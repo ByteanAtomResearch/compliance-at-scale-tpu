@@ -3,7 +3,7 @@
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ByteanAtomResearch/compliance-at-scale-tpu/blob/main/notebooks/tutorial_colab.ipynb)
 [![CI](https://github.com/ByteanAtomResearch/compliance-at-scale-tpu/actions/workflows/ci.yml/badge.svg)](https://github.com/ByteanAtomResearch/compliance-at-scale-tpu/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
-[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 
 A hands-on, reproducible tutorial for ML practitioners who want to run Responsible AI (RAI) compliance checks at scale using vLLM offline batch inference and an online API server on Cloud TPU v5e.
 
@@ -27,7 +27,7 @@ flowchart LR
 
     subgraph Eval[TPU Batch Evaluation]
         PROMPTS[Prompt Builder<br/>50 x 3 = 150 prompts]
-        VLLM[vLLM + tpu-inference<br/>Gemma 4 E4B Instruct]
+        VLLM[vLLM + tpu-inference<br/>Gemma 4 E4B-it]
         TPU[Cloud TPU v5e-4<br/>4 chips, single host]
         VLLM --> TPU
         TPU --> VLLM
@@ -141,7 +141,7 @@ Budget for this in your testing timeline. Many first-time TPU users kill the pro
 
 ## Dependency notes
 
-This tutorial uses the `vllm-tpu` package, which is a separate PyPI package from `vllm`. The TPU backend is powered by [tpu-inference](https://github.com/google/tpu-inference), a unified JAX+PyTorch plugin that replaced the legacy PyTorch/XLA-only code path in vLLM v0.5.x/v0.6.x.
+This tutorial uses the `vllm-tpu` package, which is a separate PyPI package from `vllm`. The TPU backend is powered by [tpu-inference](https://github.com/vllm-project/tpu-inference), a unified JAX+PyTorch plugin that replaced the legacy PyTorch/XLA-only code path in vLLM v0.5.x/v0.6.x.
 
 ```bash
 # Correct for TPU:
@@ -162,9 +162,9 @@ Heuristic Results Summary
 ┏━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
 ┃ Heuristic             ┃ Flagged ┃ Clean ┃ Parse Errors ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
-│ Pii Data Leakage      │      10 │    40 │            0 │
-│ Jailbreak Override    │       8 │    42 │            0 │
-│ Tone Stereotyping     │       9 │    41 │            0 │
+│ Pii Data Leakage      │       8 │    42 │            0 │
+│ Jailbreak Override    │       7 │    43 │            0 │
+│ Tone Stereotyping     │      10 │    40 │            0 │
 └───────────────────────┴─────────┴───────┴──────────────┘
 ```
 
@@ -204,7 +204,7 @@ The three heuristics are independent: a record can trip all three, exactly one, 
 If this tutorial helped your work, a star on the [rai-checklist-cli repo](https://github.com/ByteanAtomResearch/rai-checklist-cli) is appreciated. For academic citations:
 
 ```bibtex
-@misc{ackerson2025paralelizedcompliance,
+@misc{ackerson2025parallelizedcompliance,
   author = {Ackerson, Noble},
   title  = {Mass-Parallelized Compliance: Scaling RAI Checks with vLLM on Cloud TPU},
   year   = {2025},

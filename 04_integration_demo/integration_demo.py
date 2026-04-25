@@ -81,6 +81,10 @@ def run_tpu_batch_evaluation(
     the batch module or call it as a subprocess.
     """
     from vllm import LLM, SamplingParams
+    try:
+        from vllm.sampling_params import GuidedDecodingParams  # vLLM <= 0.11
+    except ImportError:  # vLLM >= 0.12
+        from vllm.sampling_params import StructuredOutputsParams as GuidedDecodingParams  # noqa: F401
 
     # Same heuristic prompts as Module 2
     heuristic_prompts = {
@@ -122,11 +126,20 @@ def run_tpu_batch_evaluation(
     console.print("[bold]TPU Batch Evaluation (vLLM)[/bold]")
     console.print(f"  Sending {len(prompts)} prompts in a single batch...")
 
+    # Auto-detect chip count; TPU_CHIPS can override.
+    try:
+        import jax as _jax
+        _chip_count = len(_jax.devices("tpu"))
+    except Exception:
+        _chip_count = int(os.environ.get("TPU_CHIPS", "4"))
+    chip_count = int(os.environ.get("TPU_CHIPS", str(_chip_count)))
+
     sampling_params = SamplingParams(temperature=0.0, max_tokens=256)
     llm = LLM(
         model=model_name,
-        tensor_parallel_size=int(os.environ.get("TPU_CHIPS", "4")),
+        tensor_parallel_size=chip_count,
         dtype="bfloat16",
+        max_model_len=int(os.environ.get("MAX_MODEL_LEN", "4096")),
     )
 
     start = time.perf_counter()

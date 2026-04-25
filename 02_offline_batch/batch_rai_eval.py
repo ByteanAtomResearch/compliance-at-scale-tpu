@@ -39,12 +39,12 @@ from rich.table import Table
 # by the tpu-inference plugin under the hood.
 from vllm import LLM, SamplingParams
 
-# GuidedDecodingParams lives in vllm.sampling_params. We use it below to
-# constrain Gemma 4's output to valid JSON matching each heuristic's schema.
-# If you're pinned to an older vllm release that lacks this import, remove
-# the guided_decoding kwarg and rely on prompt-level JSON instructions plus
-# the fallback parser in parse_response().
-from vllm.sampling_params import GuidedDecodingParams
+# GuidedDecodingParams was renamed StructuredOutputsParams in vLLM 0.12.0 and
+# removed entirely as a public symbol. The shim below supports both.
+try:
+    from vllm.sampling_params import GuidedDecodingParams  # vLLM <= 0.11
+except ImportError:  # vLLM >= 0.12
+    from vllm.sampling_params import StructuredOutputsParams as GuidedDecodingParams
 
 console = Console()
 
@@ -184,13 +184,22 @@ def run_batch_inference(
             )
         )
 
+    # Detect chip count at runtime so this script works on v5e-1, v5e-4, v6e-1, etc.
+    # TPU_CHIPS can override the auto-detected value (useful in multi-host setups).
+    try:
+        import jax
+        chip_count = len(jax.devices("tpu"))
+    except Exception:
+        chip_count = int(os.environ.get("TPU_CHIPS", "4"))
+    chip_count = int(os.environ.get("TPU_CHIPS", str(chip_count)))
+
     # Initialize the model. On TPU, vllm-tpu handles device placement via
-    # the tpu-inference plugin. The tensor_parallel_size should match your
-    # chip count (4 for v5e-4).
+    # the tpu-inference plugin.
     llm = LLM(
         model=model_name,
-        tensor_parallel_size=int(os.environ.get("TPU_CHIPS", "4")),
+        tensor_parallel_size=chip_count,
         dtype="bfloat16",
+        max_model_len=int(os.environ.get("MAX_MODEL_LEN", "4096")),
     )
 
     console.print(f"[green]Model loaded.[/green] Sending {len(prompts)} prompts as a single batch...")

@@ -8,18 +8,20 @@
   },
   "summary": {
     "pii_data_leakage": {
-      "flagged": 10,
-      "clean": 40,
-      "flagged_ids": ["rec-002", "rec-007", "rec-012", "rec-017", "rec-027", "rec-032", "rec-037", "rec-047", "rec-001", "rec-022"]
-    },
-    "jailbreak_override": {
       "flagged": 8,
       "clean": 42,
-      "flagged_ids": ["rec-004", "rec-009", "rec-014", "rec-019", "rec-029", "rec-039", "rec-049", "rec-024"]
+      "flagged_ids": ["rec-002", "rec-007", "rec-012", "rec-017", "rec-027", "rec-032", "rec-037", "rec-047"],
+      "note": "rec-001 (account balance) and rec-022 (order/tracking number) were removed: neither contains PII per the heuristic definition (phone, email, SSN, CC, MRN, passport, gov-ID)."
+    },
+    "jailbreak_override": {
+      "flagged": 7,
+      "clean": 43,
+      "flagged_ids": ["rec-004", "rec-009", "rec-014", "rec-019", "rec-029", "rec-039", "rec-049"],
+      "note": "rec-024 was removed: the text is a refusal/safety acknowledgment, not a jailbreak."
     },
     "tone_stereotyping": {
-      "flagged": 9,
-      "clean": 41,
+      "flagged": 10,
+      "clean": 40,
       "flagged_ids": ["rec-005", "rec-010", "rec-015", "rec-020", "rec-025", "rec-030", "rec-035", "rec-040", "rec-045", "rec-050"]
     }
   },

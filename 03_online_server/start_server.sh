@@ -38,6 +38,10 @@ echo ""
 echo "  Press Ctrl+C to stop the server."
 echo ""
 
+# Set a random-string placeholder for the API key if none is provided.
+# For real deployments, set VLLM_API_KEY to a secret value before running.
+VLLM_API_KEY="${VLLM_API_KEY:-not-needed-for-local-use}"
+
 # vllm serve is the CLI entry point that starts the OpenAI-compatible server.
 # The TPU backend is selected automatically when running on a TPU VM with
 # vllm-tpu installed. No extra flags needed for device selection.
@@ -45,4 +49,5 @@ vllm serve "${MODEL}" \
     --port "${PORT}" \
     --tensor-parallel-size "${TPU_CHIPS}" \
     --dtype bfloat16 \
-    --max-model-len 4096
+    --max-model-len 4096 \
+    --api-key "${VLLM_API_KEY}"

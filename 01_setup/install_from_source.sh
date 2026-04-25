@@ -7,8 +7,8 @@
 # use the Docker image instead (see provision_tpu.sh).
 #
 # The flow:
-#   1. Clone the tpu-inference repo (Google's unified JAX+PyTorch TPU backend)
-#   2. Read the pinned vLLM commit from tpu-inference's vllm_lkg.version file
+#   1. Clone the tpu-inference repo (vLLM's unified JAX+PyTorch TPU backend)
+#   2. Read the pinned vLLM commit from tpu-inference's .buildkite/vllm_lkg.version file
 #   3. Clone vLLM at that exact commit
 #   4. Build vLLM with VLLM_TARGET_DEVICE="tpu"
 #
@@ -44,18 +44,18 @@ echo "  venv:   ${WORKDIR}/.venv"
 
 # ── Step 2: Clone tpu-inference ──────────────────────────────────────────────
 echo ""
-echo "[2/5] Cloning tpu-inference (Google's unified TPU backend)..."
+echo "[2/5] Cloning tpu-inference (vLLM's unified TPU backend)..."
 if [ -d "${WORKDIR}/tpu-inference" ]; then
     echo "  Directory exists, pulling latest..."
     cd "${WORKDIR}/tpu-inference" && git pull
 else
-    git clone https://github.com/google/tpu-inference.git "${WORKDIR}/tpu-inference"
+    git clone https://github.com/vllm-project/tpu-inference.git "${WORKDIR}/tpu-inference"
 fi
 
 # ── Step 3: Read the pinned vLLM commit ──────────────────────────────────────
 echo ""
 echo "[3/5] Reading pinned vLLM commit from tpu-inference..."
-VLLM_COMMIT=$(cat "${WORKDIR}/tpu-inference/vllm_lkg.version" | tr -d '[:space:]')
+VLLM_COMMIT=$(cat "${WORKDIR}/tpu-inference/.buildkite/vllm_lkg.version" | tr -d '[:space:]')
 echo "  Pinned vLLM commit: ${VLLM_COMMIT}"
 echo ""
 echo "  Why pin this commit? The tpu-inference plugin is tested against this"
@@ -79,15 +79,21 @@ echo "  Checked out vLLM at: $(git log --oneline -1)"
 echo ""
 echo "[5/5] Building vLLM with VLLM_TARGET_DEVICE=tpu..."
 echo ""
-echo "  This compiles vLLM to use the tpu-inference backend instead of CUDA."
+echo "  vLLM must be installed before tpu-inference so the plugin can hook in."
 echo "  The build takes a few minutes."
 echo ""
 
+# Install system dependencies required by the TPU build
+sudo apt-get update -q && sudo apt-get install -y libopenblas-base libopenmpi-dev libomp-dev
+
+# Install vLLM first (TPU target), using the pinned requirements
+cd "${WORKDIR}/vllm"
+uv pip install -r requirements/tpu.txt --torch-backend=cpu
+VLLM_TARGET_DEVICE="tpu" uv pip install -e .
+
+# Install tpu-inference plugin after vLLM
 cd "${WORKDIR}/tpu-inference"
 uv pip install -e .
-
-cd "${WORKDIR}/vllm"
-VLLM_TARGET_DEVICE="tpu" uv pip install -e .
 
 echo ""
 echo "============================================"

@@ -186,6 +186,7 @@ def run_batch_inference(
     # TPU_CHIPS can override the auto-detected value (useful in multi-host setups).
     try:
         import jax
+
         chip_count = len(jax.devices("tpu"))
     except Exception:
         chip_count = int(os.environ.get("TPU_CHIPS", "4"))
@@ -225,8 +226,8 @@ def parse_response(raw_text: str) -> dict[str, Any]:
     # Strip markdown code fences if present. The regex approach handles the
     # edge case where the closing fence has trailing whitespace or no newline.
     if text.startswith("```"):
-        text = re.sub(r'^```[a-z]*\s*\n?', '', text)   # remove opening fence
-        text = re.sub(r'\n?```\s*$', '', text)           # remove closing fence
+        text = re.sub(r"^```[a-z]*\s*\n?", "", text)  # remove opening fence
+        text = re.sub(r"\n?```\s*$", "", text)  # remove closing fence
         text = text.strip()
 
     # Try to extract the first JSON object

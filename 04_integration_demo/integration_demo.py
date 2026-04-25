@@ -125,6 +125,7 @@ def run_tpu_batch_evaluation(
     # Auto-detect chip count; TPU_CHIPS can override.
     try:
         import jax as _jax
+
         _chip_count = len(_jax.devices("tpu"))
     except Exception:
         _chip_count = int(os.environ.get("TPU_CHIPS", "4"))

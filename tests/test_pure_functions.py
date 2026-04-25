@@ -12,7 +12,6 @@ including the existing ci.yml job that has no vllm-tpu installed.
 """
 
 import importlib.util
-import json
 import sys
 import tempfile
 import unittest
@@ -41,6 +40,7 @@ _demo = _load_module("04_integration_demo/integration_demo.py")
 
 
 # ── parse_response ─────────────────────────────────────────────────────────────
+
 
 class TestParseResponse(unittest.TestCase):
     def test_valid_json_returned_as_dict(self):
@@ -84,6 +84,7 @@ class TestParseResponse(unittest.TestCase):
 
 # ── build_prompts ──────────────────────────────────────────────────────────────
 
+
 class TestBuildPrompts(unittest.TestCase):
     def setUp(self):
         self.records = [
@@ -114,6 +115,7 @@ class TestBuildPrompts(unittest.TestCase):
 
 # ── load_records ───────────────────────────────────────────────────────────────
 
+
 class TestLoadRecords(unittest.TestCase):
     def _write_jsonl(self, lines: list[str]) -> str:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
@@ -121,34 +123,41 @@ class TestLoadRecords(unittest.TestCase):
             return f.name
 
     def test_valid_jsonl_loads_all_records(self):
-        path = self._write_jsonl([
-            '{"id": "r-01", "text": "hello"}\n',
-            '{"id": "r-02", "text": "world"}\n',
-        ])
+        path = self._write_jsonl(
+            [
+                '{"id": "r-01", "text": "hello"}\n',
+                '{"id": "r-02", "text": "world"}\n',
+            ]
+        )
         records = _batch.load_records(path)
         self.assertEqual(len(records), 2)
         self.assertEqual(records[0]["id"], "r-01")
 
     def test_malformed_line_is_skipped(self):
-        path = self._write_jsonl([
-            '{"id": "r-01", "text": "good"}\n',
-            'not valid json\n',
-            '{"id": "r-02", "text": "also good"}\n',
-        ])
+        path = self._write_jsonl(
+            [
+                '{"id": "r-01", "text": "good"}\n',
+                "not valid json\n",
+                '{"id": "r-02", "text": "also good"}\n',
+            ]
+        )
         records = _batch.load_records(path)
         self.assertEqual(len(records), 2)
         self.assertEqual({r["id"] for r in records}, {"r-01", "r-02"})
 
     def test_empty_lines_are_skipped(self):
-        path = self._write_jsonl([
-            '{"id": "r-01", "text": "hello"}\n',
-            '\n',
-            '{"id": "r-02", "text": "world"}\n',
-        ])
+        path = self._write_jsonl(
+            [
+                '{"id": "r-01", "text": "hello"}\n',
+                "\n",
+                '{"id": "r-02", "text": "world"}\n',
+            ]
+        )
         self.assertEqual(len(_batch.load_records(path)), 2)
 
 
 # ── aggregate_results ──────────────────────────────────────────────────────────
+
 
 class TestAggregateResults(unittest.TestCase):
     def _make_records_and_triples(self, texts):
@@ -209,6 +218,7 @@ class TestAggregateResults(unittest.TestCase):
 
 # ── generate_markdown_report ───────────────────────────────────────────────────
 
+
 class TestGenerateMarkdownReport(unittest.TestCase):
     def _make_report(self, pii_detected=False):
         evaluations = {
@@ -233,8 +243,8 @@ class TestGenerateMarkdownReport(unittest.TestCase):
         md = _demo.generate_markdown_report(self._make_report(pii_detected=True))
         self.assertIn("Issues found", md)
         # The flagged section should NOT say "All records passed"
-        lines = [l for l in md.splitlines() if "[ ]" in l]
-        self.assertTrue(all("All records passed" not in l for l in lines))
+        lines = [line for line in md.splitlines() if "[ ]" in line]
+        self.assertTrue(all("All records passed" not in line for line in lines))
 
     def test_flagged_id_appears_in_output(self):
         md = _demo.generate_markdown_report(self._make_report(pii_detected=True))
@@ -242,6 +252,7 @@ class TestGenerateMarkdownReport(unittest.TestCase):
 
 
 # ── generate_yaml_report ───────────────────────────────────────────────────────
+
 
 class TestGenerateYamlReport(unittest.TestCase):
     def _make_report(self, pii_detected=False):
@@ -256,12 +267,14 @@ class TestGenerateYamlReport(unittest.TestCase):
 
     def test_pass_status_when_no_flags(self):
         import yaml
+
         data = yaml.safe_load(_demo.generate_yaml_report(self._make_report(pii_detected=False)))
         for section in data["rai_evaluation"].values():
             self.assertEqual(section["status"], "PASS")
 
     def test_fail_status_and_count_when_flagged(self):
         import yaml
+
         data = yaml.safe_load(_demo.generate_yaml_report(self._make_report(pii_detected=True)))
         pii = data["rai_evaluation"]["Pii Data Leakage"]
         self.assertEqual(pii["status"], "FAIL")
@@ -270,6 +283,7 @@ class TestGenerateYamlReport(unittest.TestCase):
 
     def test_output_is_valid_yaml(self):
         import yaml
+
         raw = _demo.generate_yaml_report(self._make_report())
         self.assertIsInstance(yaml.safe_load(raw), dict)
 

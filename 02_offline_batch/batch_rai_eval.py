@@ -26,6 +26,7 @@ Compiled graphs are cached to ~/.cache/vllm/xla_cache for subsequent runs.
 import argparse
 import json
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -221,11 +222,11 @@ def parse_response(raw_text: str) -> dict[str, Any]:
     """
     text = raw_text.strip()
 
-    # Strip markdown code fences if present
+    # Strip markdown code fences if present. The regex approach handles the
+    # edge case where the closing fence has trailing whitespace or no newline.
     if text.startswith("```"):
-        lines = text.split("\n")
-        # Remove first and last lines (the fences)
-        text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+        text = re.sub(r'^```[a-z]*\s*\n?', '', text)   # remove opening fence
+        text = re.sub(r'\n?```\s*$', '', text)           # remove closing fence
         text = text.strip()
 
     # Try to extract the first JSON object
@@ -340,6 +341,10 @@ def print_summary(report: dict[str, Any], elapsed: float) -> None:
     throughput_table.add_row("Prompts / second", f"{num_prompts / elapsed:.2f}")
 
     console.print(throughput_table)
+    console.print()
+    console.print("[dim]Note: wall-clock time includes model load. On a cold XLA cache,")
+    console.print("  20-30 min of compilation is folded into this figure. Run a second")
+    console.print("  time (cache warm) to see inference-only throughput.[/dim]")
 
 
 def main(args: argparse.Namespace) -> None:
@@ -353,6 +358,9 @@ def main(args: argparse.Namespace) -> None:
 
     # Load records
     records = load_records(args.input)
+    if args.limit is not None:
+        records = records[: args.limit]
+        console.print(f"[dim]--limit {args.limit}: using first {len(records)} records[/dim]")
     console.print(f"Loaded {len(records)} records from {args.input}")
 
     # Build all prompts (records x heuristics)
@@ -403,6 +411,12 @@ if __name__ == "__main__":
         "--output",
         default="results/batch_results.json",
         help="Path to write the JSON evaluation report",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Evaluate only the first N records (useful for a quick smoke test)",
     )
     args = parser.parse_args()
     main(args)

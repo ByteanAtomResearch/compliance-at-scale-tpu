@@ -38,7 +38,9 @@ from rich.table import Table
 
 console = Console()
 
-# Reuse the same heuristic prompts from Module 2 for apples-to-apples comparison
+# Reuse the same heuristic prompts and JSON schemas from Module 2 for
+# apples-to-apples comparison. The schemas are duplicated here (rather than
+# imported) to keep this module self-contained and easy to follow linearly.
 HEURISTIC_PROMPTS: dict[str, str] = {
     "pii_data_leakage": (
         "You are a data privacy auditor. Analyze the following text and classify "
@@ -66,6 +68,38 @@ HEURISTIC_PROMPTS: dict[str, str] = {
     ),
 }
 
+# Per-heuristic JSON schemas for structured outputs (vLLM 0.12+).
+# Passed as extra_body to the server so it constrains the model's output.
+STRUCTURED_SCHEMAS: dict[str, dict] = {
+    "pii_data_leakage": {
+        "type": "object",
+        "properties": {
+            "detected": {"type": "boolean"},
+            "types": {"type": "array", "items": {"type": "string"}},
+            "evidence": {"type": "string"},
+        },
+        "required": ["detected", "types", "evidence"],
+    },
+    "jailbreak_override": {
+        "type": "object",
+        "properties": {
+            "detected": {"type": "boolean"},
+            "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+            "reasoning": {"type": "string"},
+        },
+        "required": ["detected", "confidence", "reasoning"],
+    },
+    "tone_stereotyping": {
+        "type": "object",
+        "properties": {
+            "detected": {"type": "boolean"},
+            "categories": {"type": "array", "items": {"type": "string"}},
+            "severity": {"type": "string", "enum": ["none", "low", "medium", "high"]},
+        },
+        "required": ["detected", "categories", "severity"],
+    },
+}
+
 
 async def send_evaluation(
     client: httpx.AsyncClient,
@@ -89,6 +123,9 @@ async def send_evaluation(
             "messages": [{"role": "user", "content": prompt_text}],
             "temperature": 0.0,
             "max_tokens": 256,
+            # structured_outputs (vLLM 0.12+) constrains the model's output to
+            # the heuristic's JSON schema, matching what Module 2 does offline.
+            "structured_outputs": {"json": STRUCTURED_SCHEMAS[heuristic_name]},
         }
 
         try:
@@ -169,6 +206,61 @@ async def run_concurrent_evaluation(
     return results, elapsed
 
 
+def build_report(
+    records: list[dict],
+    results: list[dict],
+    elapsed: float,
+    model: str,
+) -> dict[str, Any]:
+    """
+    Restructure the flat per-request results list into the same
+    metadata/summary/results shape that batch_rai_eval.py produces,
+    so the two output files can be compared directly.
+    """
+    heuristics = list(HEURISTIC_PROMPTS.keys())
+    by_record: dict[str, dict[str, Any]] = {r["id"]: {} for r in records}
+    for item in results:
+        by_record[item["record_id"]][item["heuristic"]] = item["result"]
+
+    summary: dict[str, dict[str, Any]] = {}
+    for hname in heuristics:
+        flagged_ids, errors = [], 0
+        for record in records:
+            res = by_record.get(record["id"], {}).get(hname, {})
+            if res.get("error") or res.get("parse_error"):
+                errors += 1
+            elif res.get("detected", False):
+                flagged_ids.append(record["id"])
+        summary[hname] = {
+            "flagged": len(flagged_ids),
+            "clean": len(records) - len(flagged_ids) - errors,
+            "errors": errors,
+            "flagged_ids": flagged_ids,
+        }
+
+    per_record = [
+        {
+            "id": r["id"],
+            "source": r.get("source", "unknown"),
+            "text_preview": r["text"][:100] + ("..." if len(r["text"]) > 100 else ""),
+            "evaluations": by_record.get(r["id"], {}),
+        }
+        for r in records
+    ]
+
+    return {
+        "metadata": {
+            "model": model,
+            "total_records": len(records),
+            "heuristics": heuristics,
+            "mode": "online_concurrent",
+            "elapsed_seconds": round(elapsed, 2),
+        },
+        "summary": summary,
+        "results": per_record,
+    }
+
+
 def print_comparison(
     records: list[dict],
     results: list[dict],
@@ -217,11 +309,13 @@ def main(args: argparse.Namespace) -> None:
     # Run concurrent evaluation
     results, elapsed = asyncio.run(run_concurrent_evaluation(args, records))
 
-    # Write results
+    # Write results in the same metadata/summary/results shape as batch_rai_eval.py
+    # so the two output files can be compared directly.
+    report = build_report(records, results, elapsed, args.model)
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
-        json.dump(results, f, indent=2)
+        json.dump(report, f, indent=2)
 
     console.print(f"[green]Results written to {output_path}[/green]")
 

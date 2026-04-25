@@ -201,13 +201,11 @@ def generate_markdown_report(report: dict[str, Any]) -> str:
 
         lines.append(f"## {title}")
         lines.append("")
-        lines.append(
-            f"- [{'x' if not flagged else ' '}] All records passed ({len(clean)} clean, {len(flagged)} flagged)"
-        )
-
-        if flagged:
-            lines.append(f"  - Flagged records: {', '.join(flagged)}")
-
+        if not flagged:
+            lines.append(f"- [x] All records passed ({len(clean)} clean, 0 flagged)")
+        else:
+            lines.append(f"- [ ] Issues found: {len(flagged)} flagged, {len(clean)} clean")
+            lines.append(f"  - Flagged: {', '.join(flagged)}")
         lines.append("")
 
     return "\n".join(lines)

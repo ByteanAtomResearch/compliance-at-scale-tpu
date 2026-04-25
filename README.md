@@ -11,7 +11,9 @@ A hands-on, reproducible tutorial for ML practitioners who want to run Responsib
 
 > **Heads up on Colab quotas**: free-tier Colab gates TPU access pretty aggressively. If you see "Cannot connect to TPU backend due to usage limits," you've exhausted your daily allocation. Wait 24 hours for the rolling reset, switch Google accounts, or consider [Kaggle Notebooks](https://www.kaggle.com/code) which offer 30 hours/week of TPU v3-8 free. The tutorial code itself runs on any TPU generation; only the provisioning changes.
 
-This tutorial uses [rai-checklist-cli](https://github.com/ByteanAtomResearch/rai-checklist-cli) as a real-world case study and shows how a sequential, single-record evaluation workflow transforms into a mass-parallelized batch pipeline that processes 50 records across 3 heuristics in a single forward pass.
+This tutorial uses [rai-checklist-cli](https://github.com/ByteanAtomResearch/rai-checklist-cli) as a real-world case study. That package is a CLI tool for generating and validating Responsible AI compliance checklists (Markdown, YAML, JSON) across the AI/ML lifecycle. It covers stages like data privacy, ethical considerations, and deployment monitoring, and its YAML/JSON output can gate CI/CD pipelines.
+
+The tutorial shows how the sequential, per-record evaluation pattern that rai-checklist-cli expects transforms into a mass-parallelized batch pipeline that processes 50 records across 3 heuristics in a single forward pass, then feeds the results directly back into rai-checklist-cli's existing report formats.
 
 ## Why this matters
 
@@ -37,6 +39,7 @@ flowchart LR
         JSON[batch_results.json]
         MD[evaluation_report.md]
         YAML[evaluation_report.yaml]
+        RAI[rai-checklist-cli<br/>validate / report]
     end
 
     subgraph Serve[Online API Server]
@@ -51,6 +54,8 @@ flowchart LR
     VLLM --> JSON
     JSON --> MD
     JSON --> YAML
+    MD --> RAI
+    YAML --> RAI
     JSONL -.-> CLIENT
     SERVER -.-> JSON
 

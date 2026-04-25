@@ -284,6 +284,10 @@ def main(args: argparse.Namespace) -> None:
     console.print(f"  JSON:     {json_path}")
     console.print(f"  Markdown: {md_path}")
     console.print(f"  YAML:     {yaml_path}")
+    console.print()
+    console.print("[dim]To validate the YAML report with rai-checklist-cli:")
+    console.print("  pip install rai-checklist-cli")
+    console.print(f"  rai-checklist validate {yaml_path}[/dim]")
 
     # ── Step 4: Before/after comparison ──────────────────────────────────
     console.print()

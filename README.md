@@ -7,9 +7,11 @@
 
 A hands-on, reproducible tutorial for ML practitioners who want to run Responsible AI (RAI) compliance checks at scale using vLLM offline batch inference and an online API server on Cloud TPU v5e.
 
-**No Cloud TPU?** Click the Colab badge above to run a condensed version on Colab's free TPU runtime in about 10 minutes.
+**No Cloud TPU?** Click the Colab badge above to run a condensed version on Colab's free TPU runtime using `google/gemma-3-1b-it`. The batch-inference pattern is identical to the main tutorial; only the model and hardware differ.
 
-> **Heads up on Colab quotas**: free-tier Colab gates TPU access pretty aggressively. If you see "Cannot connect to TPU backend due to usage limits," you've exhausted your daily allocation. Wait 24 hours for the rolling reset, switch Google accounts, or consider [Kaggle Notebooks](https://www.kaggle.com/code) which offer 30 hours/week of TPU v3-8 free. The tutorial code itself runs on any TPU generation; only the provisioning changes.
+> **Heads up on Colab quotas**: free-tier Colab gates TPU access pretty aggressively. If you see "Cannot connect to TPU backend due to usage limits," you've exhausted your daily allocation. Wait 24 hours for the rolling reset, switch Google accounts, or consider [Kaggle Notebooks](https://www.kaggle.com/code) which offer 30 hours/week of TPU v3-8 free.
+>
+> **Colab vs GCE model split**: The Colab notebook uses `google/gemma-3-1b-it` (Gemma 3, text-only, works via `pip install vllm-tpu`). The main tutorial uses `google/gemma-4-E4B-it` via the `vllm/vllm-tpu:gemma4` Docker image on GCE. Gemma 4 is not supported on the pip path because `Gemma4ForConditionalGeneration` is not yet in pip's JAX registry and its quantized audio weights break the fallback loader.
 
 This tutorial uses [rai-checklist-cli](https://github.com/ByteanAtomResearch/rai-checklist-cli) as a real-world case study. That package is a CLI tool for generating and validating Responsible AI compliance checklists (Markdown, YAML, JSON) across the AI/ML lifecycle. It covers stages like data privacy, ethical considerations, and deployment monitoring, and its YAML/JSON output can gate CI/CD pipelines.
 

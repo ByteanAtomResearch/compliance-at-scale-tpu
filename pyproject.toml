@@ -1,12 +1,13 @@
 # ──────────────────────────────────────────────────────────────────────────────
 # Tutorial dependencies for: Mass-Parallelized Compliance on Cloud TPU
 #
-# Install with uv:
-#   uv venv --python 3.12
+# Install with uv (Python 3.11 or newer):
+#   uv venv --python 3.11
 #   uv pip install -e .
 #
-# The tutorial targets Python 3.12 with vllm-tpu (the TPU-specific vLLM
-# distribution, distinct from the CUDA/GPU 'vllm' package on PyPI).
+# The tutorial requires vllm-tpu >= 0.13.0 (the TPU-specific vLLM distribution,
+# distinct from the CUDA/GPU 'vllm' package on PyPI). 0.13.0 is the first
+# release with Gemma 4 support.
 # ──────────────────────────────────────────────────────────────────────────────
 
 [build-system]
@@ -20,7 +21,7 @@ description = "Tutorial: Mass-Parallelized RAI Compliance Checks with vLLM Batch
 readme = "README.md"
 authors = [{ name = "Noble Ackerson", email = "noblel@byteanatom.com" }]
 license = { text = "Apache-2.0" }
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -32,7 +33,9 @@ classifiers = [
 
 dependencies = [
     # TPU-specific vLLM package. Do NOT swap this for 'vllm' (that is the GPU build).
-    "vllm-tpu>=0.8.0",
+    # 0.13.0 is the first release with Gemma 4 support. The old GuidedDecodingParams
+    # was removed in 0.12.0; this tutorial now uses the current StructuredOutputsParams.
+    "vllm-tpu>=0.13.0",
 
     # CLI UX: tables, progress bars, formatted panels
     "rich>=13.9.0",
@@ -54,6 +57,7 @@ dependencies = [
 dev = [
     "ruff>=0.7.0",
     "mypy>=1.12.0",
+    "pre-commit>=3.0",
 ]
 
 [tool.ruff]

@@ -67,8 +67,7 @@ def main(args: argparse.Namespace) -> None:
     start = time.perf_counter()
 
     # Use the chat completions endpoint with structured output.
-    # The response_format parameter tells vLLM to use guided decoding,
-    # constraining the model's output to valid JSON matching our schema.
+    # structured_outputs (vLLM 0.12+) replaces the old guided_json extra_body key.
     response = client.chat.completions.create(
         model=args.model,
         messages=[
@@ -77,14 +76,16 @@ def main(args: argparse.Namespace) -> None:
         temperature=0.0,
         max_tokens=256,
         extra_body={
-            "guided_json": {
-                "type": "object",
-                "properties": {
-                    "detected": {"type": "boolean"},
-                    "types": {"type": "array", "items": {"type": "string"}},
-                    "evidence": {"type": "string"},
-                },
-                "required": ["detected", "types", "evidence"],
+            "structured_outputs": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "detected": {"type": "boolean"},
+                        "types": {"type": "array", "items": {"type": "string"}},
+                        "evidence": {"type": "string"},
+                    },
+                    "required": ["detected", "types", "evidence"],
+                }
             }
         },
     )

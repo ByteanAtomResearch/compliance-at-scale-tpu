@@ -26,6 +26,7 @@ Compiled graphs are cached to ~/.cache/vllm/xla_cache for subsequent runs.
 import argparse
 import json
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -39,12 +40,9 @@ from rich.table import Table
 # by the tpu-inference plugin under the hood.
 from vllm import LLM, SamplingParams
 
-# GuidedDecodingParams lives in vllm.sampling_params. We use it below to
-# constrain Gemma 4's output to valid JSON matching each heuristic's schema.
-# If you're pinned to an older vllm release that lacks this import, remove
-# the guided_decoding kwarg and rely on prompt-level JSON instructions plus
-# the fallback parser in parse_response().
-from vllm.sampling_params import GuidedDecodingParams
+# StructuredOutputsParams replaced GuidedDecodingParams in vLLM 0.12.0.
+# Use it with SamplingParams(structured_outputs=...) instead of guided_decoding=...
+from vllm.sampling_params import StructuredOutputsParams
 
 console = Console()
 
@@ -174,27 +172,37 @@ def run_batch_inference(
     # max_tokens is capped to avoid runaway generation on a structured task.
     sampling_params_list: list[SamplingParams] = []
     for heuristic_name in heuristic_names:
-        guided = GuidedDecodingParams(json=GUIDED_SCHEMAS[heuristic_name])
+        structured = StructuredOutputsParams(json=GUIDED_SCHEMAS[heuristic_name])
         sampling_params_list.append(
             SamplingParams(
                 temperature=0.0,
                 max_tokens=256,
                 top_p=1.0,
-                guided_decoding=guided,
+                structured_outputs=structured,
             )
         )
 
+    # Detect chip count at runtime so this script works on v5e-1, v5e-4, v6e-1, etc.
+    # TPU_CHIPS can override the auto-detected value (useful in multi-host setups).
+    try:
+        import jax
+
+        chip_count = len(jax.devices("tpu"))
+    except Exception:
+        chip_count = int(os.environ.get("TPU_CHIPS", "4"))
+    chip_count = int(os.environ.get("TPU_CHIPS", str(chip_count)))
+
     # Initialize the model. On TPU, vllm-tpu handles device placement via
-    # the tpu-inference plugin. The tensor_parallel_size should match your
-    # chip count (4 for v5e-4).
+    # the tpu-inference plugin.
     llm = LLM(
         model=model_name,
-        tensor_parallel_size=int(os.environ.get("TPU_CHIPS", "4")),
+        tensor_parallel_size=chip_count,
         dtype="bfloat16",
+        max_model_len=int(os.environ.get("MAX_MODEL_LEN", "4096")),
     )
 
     console.print(f"[green]Model loaded.[/green] Sending {len(prompts)} prompts as a single batch...")
-    console.print("[dim]Guided decoding is active: responses are constrained to each heuristic's JSON schema.[/dim]")
+    console.print("[dim]Structured outputs active: responses are constrained to each heuristic's JSON schema.[/dim]")
     console.print()
 
     # The generate() call sends all prompts in one batch. vLLM's scheduler
@@ -215,11 +223,11 @@ def parse_response(raw_text: str) -> dict[str, Any]:
     """
     text = raw_text.strip()
 
-    # Strip markdown code fences if present
+    # Strip markdown code fences if present. The regex approach handles the
+    # edge case where the closing fence has trailing whitespace or no newline.
     if text.startswith("```"):
-        lines = text.split("\n")
-        # Remove first and last lines (the fences)
-        text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+        text = re.sub(r"^```[a-z]*\s*\n?", "", text)  # remove opening fence
+        text = re.sub(r"\n?```\s*$", "", text)  # remove closing fence
         text = text.strip()
 
     # Try to extract the first JSON object
@@ -334,6 +342,10 @@ def print_summary(report: dict[str, Any], elapsed: float) -> None:
     throughput_table.add_row("Prompts / second", f"{num_prompts / elapsed:.2f}")
 
     console.print(throughput_table)
+    console.print()
+    console.print("[dim]Note: wall-clock time includes model load. On a cold XLA cache,")
+    console.print("  20-30 min of compilation is folded into this figure. Run a second")
+    console.print("  time (cache warm) to see inference-only throughput.[/dim]")
 
 
 def main(args: argparse.Namespace) -> None:
@@ -347,6 +359,9 @@ def main(args: argparse.Namespace) -> None:
 
     # Load records
     records = load_records(args.input)
+    if args.limit is not None:
+        records = records[: args.limit]
+        console.print(f"[dim]--limit {args.limit}: using first {len(records)} records[/dim]")
     console.print(f"Loaded {len(records)} records from {args.input}")
 
     # Build all prompts (records x heuristics)
@@ -397,6 +412,12 @@ if __name__ == "__main__":
         "--output",
         default="results/batch_results.json",
         help="Path to write the JSON evaluation report",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Evaluate only the first N records (useful for a quick smoke test)",
     )
     args = parser.parse_args()
     main(args)

@@ -122,11 +122,21 @@ def run_tpu_batch_evaluation(
     console.print("[bold]TPU Batch Evaluation (vLLM)[/bold]")
     console.print(f"  Sending {len(prompts)} prompts in a single batch...")
 
+    # Auto-detect chip count; TPU_CHIPS can override.
+    try:
+        import jax as _jax
+
+        _chip_count = len(_jax.devices("tpu"))
+    except Exception:
+        _chip_count = int(os.environ.get("TPU_CHIPS", "4"))
+    chip_count = int(os.environ.get("TPU_CHIPS", str(_chip_count)))
+
     sampling_params = SamplingParams(temperature=0.0, max_tokens=256)
     llm = LLM(
         model=model_name,
-        tensor_parallel_size=int(os.environ.get("TPU_CHIPS", "4")),
+        tensor_parallel_size=chip_count,
         dtype="bfloat16",
+        max_model_len=int(os.environ.get("MAX_MODEL_LEN", "4096")),
     )
 
     start = time.perf_counter()
@@ -192,13 +202,11 @@ def generate_markdown_report(report: dict[str, Any]) -> str:
 
         lines.append(f"## {title}")
         lines.append("")
-        lines.append(
-            f"- [{'x' if not flagged else ' '}] All records passed ({len(clean)} clean, {len(flagged)} flagged)"
-        )
-
-        if flagged:
-            lines.append(f"  - Flagged records: {', '.join(flagged)}")
-
+        if not flagged:
+            lines.append(f"- [x] All records passed ({len(clean)} clean, 0 flagged)")
+        else:
+            lines.append(f"- [ ] Issues found: {len(flagged)} flagged, {len(clean)} clean")
+            lines.append(f"  - Flagged: {', '.join(flagged)}")
         lines.append("")
 
     return "\n".join(lines)

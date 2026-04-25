@@ -24,7 +24,17 @@ Sends one PII-detection request and prints the result. Good for verifying the se
 make client-concurrent
 ```
 
-Fires all 150 evaluation prompts (50 records x 3 heuristics) concurrently with controlled parallelism. The script uses `asyncio` + `httpx` to manage in-flight requests, and prints throughput metrics you can compare directly with Module 2's batch results.
+Fires all 150 evaluation prompts (50 records x 3 heuristics) concurrently with controlled parallelism. The script uses `asyncio` + `httpx` to manage in-flight requests, passes per-heuristic JSON schemas via `structured_outputs`, and writes the results in the same `metadata/summary/results` shape as Module 2 so the two output files can be compared directly.
+
+Set the concurrency limit:
+
+```bash
+make client-concurrent CONCURRENCY=20
+```
+
+## API key
+
+The server starts with `--api-key` set to a placeholder by default. For deployments outside localhost, set `VLLM_API_KEY` before running `make serve`, and pass the same value in client requests via `OPENAI_API_KEY`.
 
 ## When to use which approach
 

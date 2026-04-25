@@ -53,12 +53,15 @@ if gcloud compute tpus tpu-vm describe "${TPU_NAME}" \
     --zone="${ZONE}" &>/dev/null; then
     echo "  TPU VM '${TPU_NAME}' already exists. Skipping creation."
 else
+    # Remove --preemptible to create an on-demand VM (recommended for tutorials
+    # where XLA compilation takes 20-30 min on first run -- preemptible VMs can
+    # be killed mid-compilation). Add --preemptible back here if you want to
+    # reduce cost and are willing to handle restarts.
     gcloud compute tpus tpu-vm create "${TPU_NAME}" \
         --project="${PROJECT_ID}" \
         --zone="${ZONE}" \
         --accelerator-type="${TPU_TYPE}" \
-        --version="${RUNTIME_VERSION}" \
-        --preemptible
+        --version="${RUNTIME_VERSION}"
 
     echo "  TPU VM created successfully."
 fi
@@ -73,9 +76,11 @@ echo ""
 echo "  The container runs with:"
 echo "    --privileged       (required for TPU device access)"
 echo "    --net=host         (expose the API server on the host network)"
-echo "    --shm-size=150gb   (shared memory for model weights)"
+echo "    --shm-size=16g     (shared memory for model weights)"
 echo ""
 
+# Write the HF token to a temp file on the remote VM and pass it via --env-file
+# to avoid the token appearing in `docker inspect` output.
 gcloud compute tpus tpu-vm ssh "${TPU_NAME}" \
     --project="${PROJECT_ID}" \
     --zone="${ZONE}" \
@@ -83,15 +88,22 @@ gcloud compute tpus tpu-vm ssh "${TPU_NAME}" \
         # Pull the latest image
         sudo docker pull ${DOCKER_IMAGE}
 
+        # Write the HF token to a restricted env file so it doesn't appear
+        # in 'docker inspect' output (safer than passing -e HF_TOKEN=... inline).
+        printf 'HF_TOKEN=%s\n' '${HF_TOKEN}' > /tmp/vllm-env
+        chmod 600 /tmp/vllm-env
+
         # Run the container in detached mode
         sudo docker run -d \
             --privileged \
             --net=host \
-            --shm-size=150gb \
+            --shm-size=16g \
             --name vllm-server \
-            -e HF_TOKEN=${HF_TOKEN} \
+            --env-file /tmp/vllm-env \
             ${DOCKER_IMAGE} \
             --model ${MODEL}
+
+        rm -f /tmp/vllm-env
 
         echo ''
         echo 'Container launched. Checking status...'

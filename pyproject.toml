@@ -1,12 +1,13 @@
 # ──────────────────────────────────────────────────────────────────────────────
 # Tutorial dependencies for: Mass-Parallelized Compliance on Cloud TPU
 #
-# Install with uv:
-#   uv venv --python 3.12
+# Install with uv (Python 3.11 or newer):
+#   uv venv --python 3.11
 #   uv pip install -e .
 #
-# The tutorial targets Python 3.12 with vllm-tpu (the TPU-specific vLLM
-# distribution, distinct from the CUDA/GPU 'vllm' package on PyPI).
+# The tutorial requires vllm-tpu >= 0.13.0 (the TPU-specific vLLM distribution,
+# distinct from the CUDA/GPU 'vllm' package on PyPI). 0.13.0 is the first
+# release with Gemma 4 support.
 # ──────────────────────────────────────────────────────────────────────────────
 
 [build-system]

@@ -27,6 +27,16 @@ python 02_offline_batch/batch_rai_eval.py \
     --output results/batch_results.json
 ```
 
+For a quick smoke test that skips the full 50-record run:
+
+```bash
+python 02_offline_batch/batch_rai_eval.py \
+    --model google/gemma-4-E4B-it \
+    --input sample_data/llm_outputs.jsonl \
+    --output results/batch_results.json \
+    --limit 5
+```
+
 ## Expected output
 
 The script prints a summary table and throughput metrics to the console, and writes the full evaluation report to `results/batch_results.json`.

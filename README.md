@@ -68,7 +68,7 @@ By the end of this tutorial you'll know how to:
 - Provision a Cloud TPU v5e-4 VM and run vLLM via Docker
 - Write an offline batch evaluation script that processes 150 judge prompts in a single vLLM call
 - Launch an OpenAI-compatible API server on TPU and hit it from async Python clients
-- Use Gemma 4's native structured JSON output and vLLM guided decoding to eliminate fragile response parsing
+- Use Gemma 4's native structured JSON output and vLLM structured outputs to eliminate fragile response parsing
 - Plug the results into existing compliance reports (Markdown, YAML, JSON)
 
 ## Prerequisites
@@ -76,7 +76,7 @@ By the end of this tutorial you'll know how to:
 - A Google Cloud project with TPU API enabled
 - Quota for Cloud TPU v5e in a supported zone (e.g., `us-central2-b`)
 - A Hugging Face account with access to `google/gemma-4-E4B-it`
-- Python 3.12 and [uv](https://docs.astral.sh/uv/) on your local machine
+- Python 3.11+ and [uv](https://docs.astral.sh/uv/) on your local machine
 - Basic comfort with the command line and Python
 
 If you lack GCE access, see the Colab TPU v2 fallback note in `01_setup/README.md`. You'll lose throughput compared to v5e, and the code remains the same.
@@ -107,9 +107,11 @@ If you lack GCE access, see the Colab TPU v2 fallback note in `01_setup/README.m
 │   └── README.md
 ├── notebooks/
 │   └── tutorial_colab.ipynb             → Colab TPU v2 fallback
-└── sample_data/
-    ├── llm_outputs.jsonl                → 50 test records
-    └── expected_output_sample.json      → Reference output
+├── sample_data/
+│   ├── llm_outputs.jsonl                → 50 test records
+│   └── expected_output_sample.json      → Reference output
+└── tests/
+    └── test_pure_functions.py           → Unit tests (no TPU required)
 ```
 
 ## Quick start
@@ -123,12 +125,18 @@ make verify
 # Run the offline batch evaluation (Module 2)
 make batch
 
+# Quick smoke test on 5 records (skips the full 50-record run)
+make batch ARGS="--limit 5"
+
 # Or launch the online API server (Module 3)
 make serve     # in one terminal
 make client    # in another terminal
 
 # End-to-end demo with rai-checklist-cli formats (Module 4)
 make demo
+
+# Run unit tests (no TPU required)
+make test
 ```
 
 ## A warning about XLA compilation

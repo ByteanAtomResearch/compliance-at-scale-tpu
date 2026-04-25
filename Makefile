@@ -8,7 +8,7 @@ DATA        ?= sample_data/llm_outputs.jsonl
 PORT        ?= 8000
 CONCURRENCY ?= 10
 
-.PHONY: help setup verify batch serve client client-concurrent demo clean
+.PHONY: help setup verify batch serve client client-concurrent demo test clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -22,11 +22,13 @@ verify: ## Verify TPU + vLLM installation
 	python 01_setup/verify_install.py
 
 # ── Module 2: Offline Batch ────────────────────────────────
+ARGS ?=
 batch: ## Run offline batch RAI evaluation on sample data
 	python 02_offline_batch/batch_rai_eval.py \
 		--model $(MODEL) \
 		--input $(DATA) \
-		--output results/batch_results.json
+		--output results/batch_results.json \
+		$(ARGS)
 
 # ── Module 3: Online Server ────────────────────────────────
 serve: ## Launch vLLM OpenAI-compatible API server
@@ -49,5 +51,8 @@ demo: ## Run end-to-end integration demo with rai-checklist-cli
 		--model $(MODEL)
 
 # ── Utilities ──────────────────────────────────────────────
+test: ## Run unit tests (no TPU hardware required)
+	python -m unittest discover -s tests -p "test_*.py" -v
+
 clean: ## Remove generated results
 	rm -rf results/

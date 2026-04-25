@@ -38,6 +38,8 @@ The first inference request on TPU triggers XLA compilation and static shape buc
 
 If you lack GCE access, you can run a reduced version of this tutorial on Colab's free TPU v2 runtime. Open [`notebooks/tutorial_colab.ipynb`](../notebooks/tutorial_colab.ipynb) in Colab (the badge at the top of the main README is a direct link) and run the cells in order.
 
-The Colab notebook is a condensed end-to-end path: verification check, 10-record batch evaluation, and results table. It uses `google/gemma-4-E2B-it` (Gemma 4 Effective 2B, ~5.1B total weights) with `max_model_len=512` to fit within Colab's TPU v2-8 memory budget. Throughput lands around 3-5 records/second versus 8-12 records/second on a full v5e-4 setup.
+The Colab notebook is a condensed end-to-end path: verification check, 10-record batch evaluation, and results table. It uses `google/gemma-3-1b-it` -- a pure text-only Gemma 3 model (~1B parameters, ~2 GB BF16) that runs reliably via the pip-installed `vllm-tpu`. Throughput lands around 3-5 records/second versus 8-12 records/second on a full v5e-4 setup.
+
+**Why not Gemma 4 in Colab?** `Gemma4ForConditionalGeneration` is not registered in the pip package's JAX model registry, and the vLLM fallback path fails on Gemma 4's quantized audio tower weights. Gemma 4 requires the `vllm/vllm-tpu:gemma4` Docker image on GCE hardware (what the main tutorial uses). The batch-inference code pattern is identical between the two paths.
 
 The tutorial code patterns are identical between the two paths. Only the provisioning and model size change.

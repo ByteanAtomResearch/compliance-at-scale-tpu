@@ -21,7 +21,12 @@ When filing a bug, include:
 ## Pull requests
 
 - Keep changes focused: one module or one doc fix per PR
-- Run `ruff check .` and `ruff format .` before pushing
+- Run `ruff check .` and `ruff format .` before pushing — or install the pre-commit hook so this happens automatically on every commit:
+  ```bash
+  pip install pre-commit
+  pre-commit install
+  ```
+  After that, `git commit` will run lint and format checks automatically. To run against all files manually: `pre-commit run --all-files`.
 - Do not add abstraction layers or wrapper classes to the module scripts. The code is intentionally flat so readers can follow it linearly.
 - Do not introduce production features like retry logic, queues, or CLI frameworks. This is a teaching repo.
 

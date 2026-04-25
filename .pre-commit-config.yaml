@@ -1,0 +1,20 @@
+# Pre-commit hooks for this tutorial repo.
+#
+# Setup (one-time, requires pre-commit installed):
+#   pip install pre-commit
+#   pre-commit install
+#
+# After that, every `git commit` automatically runs ruff lint + format.
+# To run manually against all files:
+#   pre-commit run --all-files
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Pin to the same version used in CI (.github/workflows/ci.yml).
+    rev: v0.7.0
+    hooks:
+      # Lint and auto-fix where possible (equivalent to `ruff check . --fix`)
+      - id: ruff
+        args: [--fix]
+      # Format (equivalent to `ruff format .`)
+      - id: ruff-format

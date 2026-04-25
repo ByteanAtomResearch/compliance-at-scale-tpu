@@ -32,9 +32,9 @@ classifiers = [
 
 dependencies = [
     # TPU-specific vLLM package. Do NOT swap this for 'vllm' (that is the GPU build).
-    # Pinned to 0.11.x: GuidedDecodingParams was removed in 0.12.0. When upgrading,
-    # verify the import shim in batch_rai_eval.py still works with the new version.
-    "vllm-tpu~=0.11.1",
+    # 0.13.0 is the first release with Gemma 4 support. The old GuidedDecodingParams
+    # was removed in 0.12.0; this tutorial now uses the current StructuredOutputsParams.
+    "vllm-tpu>=0.13.0",
 
     # CLI UX: tables, progress bars, formatted panels
     "rich>=13.9.0",

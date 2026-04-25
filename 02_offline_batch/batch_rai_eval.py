@@ -39,12 +39,9 @@ from rich.table import Table
 # by the tpu-inference plugin under the hood.
 from vllm import LLM, SamplingParams
 
-# GuidedDecodingParams was renamed StructuredOutputsParams in vLLM 0.12.0 and
-# removed entirely as a public symbol. The shim below supports both.
-try:
-    from vllm.sampling_params import GuidedDecodingParams  # vLLM <= 0.11
-except ImportError:  # vLLM >= 0.12
-    from vllm.sampling_params import StructuredOutputsParams as GuidedDecodingParams
+# StructuredOutputsParams replaced GuidedDecodingParams in vLLM 0.12.0.
+# Use it with SamplingParams(structured_outputs=...) instead of guided_decoding=...
+from vllm.sampling_params import StructuredOutputsParams
 
 console = Console()
 
@@ -174,13 +171,13 @@ def run_batch_inference(
     # max_tokens is capped to avoid runaway generation on a structured task.
     sampling_params_list: list[SamplingParams] = []
     for heuristic_name in heuristic_names:
-        guided = GuidedDecodingParams(json=GUIDED_SCHEMAS[heuristic_name])
+        structured = StructuredOutputsParams(json=GUIDED_SCHEMAS[heuristic_name])
         sampling_params_list.append(
             SamplingParams(
                 temperature=0.0,
                 max_tokens=256,
                 top_p=1.0,
-                guided_decoding=guided,
+                structured_outputs=structured,
             )
         )
 
@@ -203,7 +200,7 @@ def run_batch_inference(
     )
 
     console.print(f"[green]Model loaded.[/green] Sending {len(prompts)} prompts as a single batch...")
-    console.print("[dim]Guided decoding is active: responses are constrained to each heuristic's JSON schema.[/dim]")
+    console.print("[dim]Structured outputs active: responses are constrained to each heuristic's JSON schema.[/dim]")
     console.print()
 
     # The generate() call sends all prompts in one batch. vLLM's scheduler

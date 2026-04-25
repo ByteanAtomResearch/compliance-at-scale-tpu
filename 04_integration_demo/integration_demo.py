@@ -81,10 +81,6 @@ def run_tpu_batch_evaluation(
     the batch module or call it as a subprocess.
     """
     from vllm import LLM, SamplingParams
-    try:
-        from vllm.sampling_params import GuidedDecodingParams  # vLLM <= 0.11
-    except ImportError:  # vLLM >= 0.12
-        from vllm.sampling_params import StructuredOutputsParams as GuidedDecodingParams  # noqa: F401
 
     # Same heuristic prompts as Module 2
     heuristic_prompts = {

@@ -58,6 +58,12 @@ dev = [
     "ruff>=0.7.0",
     "mypy>=1.12.0",
     "pre-commit>=3.0",
+
+    # Tokenizer-only, CPU-only use by 05_trajectory_eval/bands.py to measure
+    # judge-prompt token lengths locally. The Gemma checkpoints are gated on
+    # Hugging Face, so bands.py needs HF auth (huggingface-cli login or
+    # HF_TOKEN) even though it never loads model weights.
+    "transformers>=4.44",
 ]
 
 [tool.ruff]

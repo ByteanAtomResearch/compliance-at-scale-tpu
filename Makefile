@@ -8,7 +8,7 @@ DATA        ?= sample_data/llm_outputs.jsonl
 PORT        ?= 8000
 CONCURRENCY ?= 10
 
-.PHONY: help setup verify batch serve client client-concurrent demo test clean
+.PHONY: help setup verify batch serve client client-concurrent demo trajectory score bands test clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -49,6 +49,21 @@ demo: ## Run end-to-end integration demo with rai-checklist-cli
 	python 04_integration_demo/integration_demo.py \
 		--input $(DATA) \
 		--model $(MODEL)
+
+# ── Module 5: Trajectory Eval (Part 2) ─────────────────────
+trajectory: ## Run trajectory eval on TPU (ARGS="--band all --repeat 3")
+	python 05_trajectory_eval/batch_trajectory_eval.py \
+		--model $(MODEL) \
+		$(ARGS)
+
+score: ## Score judge vs rules baseline (no TPU)
+	python 05_trajectory_eval/score.py \
+		--judge results/trajectory_verdicts.json \
+		--baseline results/rules_verdicts.json \
+		--labels sample_data/trajectories.jsonl
+
+bands: ## Emit corpus token distribution + band proposal (no TPU)
+	python 05_trajectory_eval/bands.py --corpus sample_data/trajectories.jsonl
 
 # ── Utilities ──────────────────────────────────────────────
 test: ## Run unit tests (no TPU hardware required)

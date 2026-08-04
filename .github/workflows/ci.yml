@@ -37,7 +37,18 @@ jobs:
             02_offline_batch/batch_rai_eval.py \
             03_online_server/client_single.py \
             03_online_server/client_concurrent.py \
-            04_integration_demo/integration_demo.py
+            04_integration_demo/integration_demo.py \
+            05_trajectory_eval/schema.py \
+            05_trajectory_eval/canonicalize.py \
+            05_trajectory_eval/corpus.py \
+            05_trajectory_eval/generate_candidates.py \
+            05_trajectory_eval/adjudicate.py \
+            05_trajectory_eval/rules_baseline.py \
+            05_trajectory_eval/prompts.py \
+            05_trajectory_eval/bands.py \
+            05_trajectory_eval/freeze.py \
+            05_trajectory_eval/batch_trajectory_eval.py \
+            05_trajectory_eval/score.py
 
       - name: Shellcheck on bash scripts
         uses: ludeeus/action-shellcheck@2.0.0

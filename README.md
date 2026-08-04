@@ -1,14 +1,14 @@
 # Mass-Parallelized Compliance: Scaling RAI Checks with vLLM Batch Inference on Cloud TPU
 
 [![Part 1: Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ByteanAtomResearch/compliance-at-scale-tpu/blob/v1.0-part1/notebooks/tutorial_colab.ipynb) Part 1: single-output eval
-[![Part 2: Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ByteanAtomResearch/compliance-at-scale-tpu/blob/v2.0-part2/notebooks/trajectory_colab.ipynb) Part 2: trajectory eval demo
+[![Part 2: Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ByteanAtomResearch/compliance-at-scale-tpu/blob/main/notebooks/trajectory_colab.ipynb) Part 2: trajectory eval demo
 [![CI](https://github.com/ByteanAtomResearch/compliance-at-scale-tpu/actions/workflows/ci.yml/badge.svg)](https://github.com/ByteanAtomResearch/compliance-at-scale-tpu/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 
 A hands-on, reproducible tutorial for ML practitioners who want to run Responsible AI (RAI) compliance checks at scale using vLLM offline batch inference and an online API server on Cloud TPU v5e.
 
-**No Cloud TPU?** The two Colab badges above run on Colab's free TPU runtime using `google/gemma-3-1b-it`: Part 1 is the condensed single-output evaluation, Part 2 is the trajectory-evaluation demo. Each badge is pinned to its article's release tag, so the code cannot move underneath a published post. The patterns are identical to the main tutorial; only the model and hardware differ.
+**No Cloud TPU?** The two Colab badges above run on Colab's free TPU runtime using `google/gemma-3-1b-it`: Part 1 is the condensed single-output evaluation, Part 2 is the trajectory-evaluation demo. The Part 1 badge is pinned to `v1.0-part1`, so the code cannot move underneath the published post. The Part 2 badge tracks `main` and gets pinned to `v2.0-part2` on publication day, once the schema, prompt, and band freeze in `05_trajectory_eval/FROZEN.md` is complete. The patterns are identical to the main tutorial; only the model and hardware differ.
 
 > **Heads up on Colab quotas**: free-tier Colab gates TPU access pretty aggressively. If you see "Cannot connect to TPU backend due to usage limits," you've exhausted your daily allocation. Wait 24 hours for the rolling reset, switch Google accounts, or consider [Kaggle Notebooks](https://www.kaggle.com/code) which offer 30 hours/week of TPU v3-8 free.
 >

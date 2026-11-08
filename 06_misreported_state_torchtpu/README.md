@@ -20,6 +20,8 @@ Everything else is 05's. 06 imports 05's schema, corpus loader, prompts, band se
 | `data/tamper_corpus.jsonl`, `data/tamper_rejections.jsonl` | Created by `adjudicate.py --corpus --rejections` during review. Not committed until then. |
 | `published/` | Committed home for the Part 3 result files after the TPU runs. `results/` is gitignored at every depth, so a number in the post has to point at a file here. |
 
+`parity.py` and `bridge.py` exit 2 when they refuse their inputs (a guard or a validation failure) and 1 on any other error, so a script can tell a refusal from a crash.
+
 Tests live beside 05's in `tests/`: `test_misreport_data.py`, `test_misreport_runner.py`, `test_misreport_parity.py`, `test_misreport_bridge.py`. `make test` runs 266 tests on this branch, 181 of them 05's, with no TPU and no vllm.
 
 ## What `--backend` may and may not do
@@ -30,7 +32,7 @@ Reader exercise: `diff <(sed -n '/^def run_band/,/^    return result/p' 05_traje
 
 ## Guardrails this module was built under
 
-The rules are in [AGENTS.md](../AGENTS.md) at the repo root (Claude Code reads it through `CLAUDE.md`; Codex and Antigravity read it directly). In short: 05 is never modified; work happens on `part3-module06`; no cloud resource is created without a yes; no `pip install -e .` in a TorchTPU environment; every step also exists as plain shell; every run log records the commit SHA; tags are cut from the maintainer's machine.
+The rules are in [AGENTS.md](../AGENTS.md) at the repo root (Claude Code reads it through `CLAUDE.md`; Codex and Antigravity read it directly). In short: 05 is never modified; work happens on `part3-module06`; no cloud resource is created without a yes; no `pip install -e .` in a TorchTPU environment; every step also exists as plain shell; every run log records the commit SHA; tags are cut from the maintainer's machine, because the cloud GitHub proxy rejects pushes of anything other than a branch, tags included ([code.claude.com/docs/en/security](https://code.claude.com/docs/en/security)).
 
 ## Setup on your machine
 
@@ -288,9 +290,9 @@ python 06_misreported_state_torchtpu/parity.py \
   --output /tmp/parity_should_not_exist.json
 ```
 
-It exits 1 with `refusing to compare: the two runs differ in more than the backend` and a line naming `prompt_hash`, and `/tmp/parity_should_not_exist.json` does not exist.
+It exits 2 (refused: the runs are not comparable) with `refusing to compare: the two runs differ in more than the backend` and a line naming `prompt_hash`, and `/tmp/parity_should_not_exist.json` does not exist.
 
-**Checkpoint:** the smoke comparison writes a report covering 12 state decisions with an agreement count per state. The tampered comparison exits non-zero and writes nothing. `make test` passes.
+**Checkpoint:** the smoke comparison writes a report covering 12 state decisions with an agreement count per state. The tampered comparison exits 2 and writes nothing. `make test` passes.
 
 **Exercise:** with 12 decisions, kappa says almost nothing. Find how 05's `score.py` reports uncertainty for small counts, and compare it with what parity prints beside kappa when a state has fewer than 10 decisions.
 
@@ -321,13 +323,13 @@ jq '.verdicts[(.verdicts | keys[0])].violations += [{"state":"vibes","failed_ste
 python 06_misreported_state_torchtpu/bridge.py --verdicts /tmp/bad_state.json --yaml /tmp/bad.yaml
 ```
 
-The bridge runs 05's `validate_verdict` on every verdict before writing anything, so it exits 1 with `unknown violation state 'vibes'` and `/tmp/bad.yaml` does not exist. A report that passed unknown states through would be a compliance artifact nobody can audit.
+The bridge runs 05's `validate_verdict` on every verdict before writing anything, so it exits 2 (refused: 05's schema rejects the verdict) with `unknown violation state 'vibes'` and `/tmp/bad.yaml` does not exist. A report that passed unknown states through would be a compliance artifact nobody can audit.
 
-**Checkpoint:** the YAML has six sections under `rai_evaluation`, one per state in 05's order, each with status PASS or FAIL. Recommended enforcement appears only under the separate `policy` block, sourced from each verdict's policy object, never inside a section. A `provenance` block carries model, backend, dtype, prompt hash, call mode, parse errors, revision, image digest and git sha. The bad-state run exits non-zero.
+**Checkpoint:** the YAML has six sections under `rai_evaluation`, one per state in 05's order, each with status PASS or FAIL. Recommended enforcement appears only under the separate `policy` block, sourced from each verdict's policy object, never inside a section. A `provenance` block carries model, backend, dtype, prompt hash, call mode, parse errors, revision, image digest and git sha. The bad-state run exits 2.
 
 **Exercise:** 05's schema says enforcement is operator policy and never model output. Find where `verdict_to_dict` puts it, and explain what would go wrong for an auditor if the bridge merged it into the violations.
 
-rai-checklist-cli compatibility is a shape claim, the same one 04 makes. Whether `rai-checklist validate` tolerates `policy` and `provenance` beside `rai_evaluation` has not been checked in this repo; if it is strict, nest the two under one extra key.
+rai-checklist-cli compatibility is a shape claim, the same one 04 makes. The package's validator (`validate_checklist.py` in rai-checklist-cli 0.7.4) checks that a generated checklist has its required section names as top-level keys and ignores extra keys; it has no subcommand for evaluation reports. It validates the checklists the CLI generates, so neither 04's nor 06's evaluation report is meant to pass it. `policy` and `provenance` sit beside `rai_evaluation` as top-level siblings, which a validator that ignores extra keys would skip.
 
 ## Lab G: the true runs and the numbers
 
@@ -419,5 +421,4 @@ Every number here is `[MEASURED: pending]` until the Lab G files exist in `publi
 - Whether the 26B-A4B FP8 checkpoint serves on a v6e-4 under either backend. Lab A answers it.
 - Whether xgrammar structured outputs hold up on Gemma 4 under vllm-torchtpu. Its own tests cover them on a small Qwen model only. `run.py` counts parse errors and never repairs or retries, so a malformation rate becomes a finding.
 - What to record as `CONTAINER_IMAGE_DIGEST` for the TorchTPU venv. 05's metadata assumes a container. Hashing `uv pip freeze` is a suggestion, not 05's rule.
-- Whether `rai-checklist validate` accepts the two extra top-level keys the bridge writes beside `rai_evaluation`.
 - The `bands.py --tokenizer` path for the 26B checkpoint needs a Hugging Face token. The tests and the Lab D plan diff use a whitespace tokenizer stand-in so they run anywhere.

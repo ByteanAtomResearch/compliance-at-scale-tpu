@@ -10,7 +10,8 @@ max_model_len must match, and the band report hash and dtype must match
 when both files carry them. A parity number across two different prompts
 would look like a backend difference and be nothing of the kind. The two
 files must also cover the same record ids, because 05's scorer treats a
-missing id as a negative without saying so.
+missing id as a negative without saying so. A refusal exits 2 and writes
+nothing; any other error exits 1.
 
 What it reports. Per state: n decisions (one per record), the agreement
 count and rate with a Wilson interval, the 2x2 split (both detected, left
@@ -36,8 +37,9 @@ Usage:
 
 import argparse
 import json
+import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 import lab05
 from rich.console import Console
@@ -48,6 +50,26 @@ _corpus = lab05.load("corpus")
 _schema = lab05.load("schema")
 
 console = Console()
+
+# Exit statuses. A refusal (the two runs are not comparable) exits 2 so a script can tell it from any
+# other error, which exits 1 the way 05's tools do. Six lines, duplicated in
+# parity.py and bridge.py on purpose: a shared module would need the lab05
+# registration dance in every test for six lines.
+EXIT_REFUSED = 2
+
+
+class Refusal(SystemExit):
+    """The inputs were refused before anything was written. Carries the message for tests."""
+
+    def __init__(self, message: str):
+        super().__init__(EXIT_REFUSED)
+        self.message = message
+
+
+def refuse(message: str) -> NoReturn:
+    print(message, file=sys.stderr)
+    raise Refusal(message)
+
 
 # Field names come from 05's build_run_metadata. A test cross-checks every
 # name here against what that function emits, so a typo cannot turn the
@@ -411,7 +433,11 @@ def print_report(result: dict[str, Any]) -> None:
 
 
 def compare(args: argparse.Namespace) -> dict[str, Any]:
-    """Gate first, then measure. Raises SystemExit before anything is computed when the runs differ."""
+    """Gate first, then measure. Refuses (exit 2) before anything is computed when the runs differ.
+
+    Any other error, such as a file without verdicts or a labels corpus that
+    does not load, exits 1.
+    """
     left_doc, right_doc = load_run(args.left), load_run(args.right)
     left_meta, right_meta = left_doc.get("metadata", {}), right_doc.get("metadata", {})
     left_verdicts, right_verdicts = left_doc["verdicts"], right_doc["verdicts"]
@@ -420,9 +446,7 @@ def compare(args: argparse.Namespace) -> dict[str, Any]:
 
     mismatches = metadata_mismatches(left_meta, right_meta) + id_mismatches(left_verdicts, right_verdicts)
     if mismatches:
-        raise SystemExit(
-            "refusing to compare: the two runs differ in more than the backend\n  " + "\n  ".join(mismatches)
-        )
+        refuse("refusing to compare: the two runs differ in more than the backend\n  " + "\n  ".join(mismatches))
 
     records: list | None = None
     labels: dict[str, Any] | None = None

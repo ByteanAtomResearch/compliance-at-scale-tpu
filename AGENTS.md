@@ -30,7 +30,10 @@ later work too.
 7. Tags (`v2.0-part2`, `v3.0-part3`) are cut and pushed from the maintainer's
    machine, never from a cloud session. `v2.0-part2` exists before
    `part3-module06` merges to `main`, because `main`'s README tracks `main`
-   for the Part 2 badge until that tag exists.
+   for the Part 2 badge until that tag exists. The cloud GitHub proxy rejects
+   pushes of anything other than a branch, tags included, by design
+   (code.claude.com/docs/en/security, Cloud execution security). That is
+   separate from a missing push grant.
 
 ## Files that belong to Part 2's freeze
 

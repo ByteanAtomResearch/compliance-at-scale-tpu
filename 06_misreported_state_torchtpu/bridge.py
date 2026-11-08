@@ -15,7 +15,8 @@ enforcement is operator policy and never model output (05's verdict_to_dict
 says so in the verdict's policy object), so it lives in its own policy
 block and never inside a section's findings. A provenance block carries the
 run's model, backend, prompt hash, parse errors and commit so an auditor
-can trace the report back to a run log.
+can trace the report back to a run log. A verdict the schema rejects makes
+the bridge exit 2 with nothing written; any other error exits 1.
 
 Usage:
     python 06_misreported_state_torchtpu/bridge.py \
@@ -25,8 +26,9 @@ Usage:
 
 import argparse
 import json
+import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 import lab05
 import yaml
@@ -36,6 +38,26 @@ from rich.table import Table
 _schema = lab05.load("schema")
 
 console = Console()
+
+# Exit statuses. A refusal (a verdict 05's schema rejects) exits 2 so a script can tell it from any
+# other error, which exits 1 the way 05's tools do. Six lines, duplicated in
+# parity.py and bridge.py on purpose: a shared module would need the lab05
+# registration dance in every test for six lines.
+EXIT_REFUSED = 2
+
+
+class Refusal(SystemExit):
+    """The inputs were refused before anything was written. Carries the message for tests."""
+
+    def __init__(self, message: str):
+        super().__init__(EXIT_REFUSED)
+        self.message = message
+
+
+def refuse(message: str) -> NoReturn:
+    print(message, file=sys.stderr)
+    raise Refusal(message)
+
 
 UNRECORDED = "unrecorded"
 PROVENANCE_FIELDS: tuple[str, ...] = (
@@ -66,12 +88,12 @@ def load_verdict_file(path: str | Path) -> dict[str, Any]:
 
 
 def validate_verdicts(verdicts: dict[str, dict[str, Any]]) -> None:
-    """05's own rule, applied before anything is written. The first failure exits."""
+    """05's own rule, applied before anything is written. The first failure exits 2."""
     for record_id, verdict in verdicts.items():
         try:
             _schema.validate_verdict(_schema.verdict_from_dict(verdict))
         except (ValueError, TypeError, KeyError) as exc:
-            raise SystemExit(f"verdict for {record_id} is invalid: {exc}") from exc
+            refuse(f"verdict for {record_id} is invalid: {exc}")
 
 
 def flagged_by_state(verdicts: dict[str, dict[str, Any]]) -> dict[str, list[str]]:

@@ -109,9 +109,10 @@ def _expect_refusal(test: unittest.TestCase, doc: dict, needle: str | None = Non
     md_path, yaml_path = _tmp("report.md"), _tmp("report.yaml")
     with test.assertRaises(SystemExit) as ctx:
         _bridge.main(argparse.Namespace(verdicts=str(verdict_path), markdown=str(md_path), yaml=str(yaml_path)))
-    test.assertNotEqual(ctx.exception.code, 0)
+    test.assertEqual(ctx.exception.code, _bridge.EXIT_REFUSED)
+    test.assertEqual(ctx.exception.code, 2)
     if needle:
-        test.assertIn(needle, str(ctx.exception))
+        test.assertIn(needle, ctx.exception.message)
     test.assertFalse(md_path.exists())
     test.assertFalse(yaml_path.exists())
 
@@ -143,14 +144,16 @@ class TestValidation(unittest.TestCase):
     def test_no_output_flag_is_an_error(self):
         verdict_path = _tmp("verdicts.json")
         verdict_path.write_text(json.dumps(_doc06(_verdicts())), encoding="utf-8")
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(SystemExit) as ctx:
             _bridge.main(argparse.Namespace(verdicts=str(verdict_path), markdown=None, yaml=None))
+        self.assertNotEqual(ctx.exception.code, 2)  # usage error, not a refusal
 
-    def test_file_without_verdicts_is_refused(self):
+    def test_file_without_verdicts_exits_1_not_2(self):
         verdict_path = _tmp("plan.json")
         verdict_path.write_text(json.dumps({"metadata": {}, "plan": []}), encoding="utf-8")
         with self.assertRaises(SystemExit) as ctx:
             _bridge.main(argparse.Namespace(verdicts=str(verdict_path), markdown=None, yaml=str(_tmp("r.yaml"))))
+        self.assertNotEqual(ctx.exception.code, 2)
         self.assertIn("verdicts", str(ctx.exception))
 
 

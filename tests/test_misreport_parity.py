@@ -178,13 +178,22 @@ class TestMetadataGate(unittest.TestCase):
     def test_identical_metadata_passes(self):
         self.assertEqual(_parity.metadata_mismatches(_meta(), dict(_meta())), [])
 
-    def test_prompt_hash_mismatch_exits_nonzero_and_writes_nothing(self):
+    def test_missing_verdicts_key_exits_1_not_2(self):
+        plan = _tmp("plan.json")
+        plan.write_text(json.dumps({"metadata": _meta(), "plan": []}), encoding="utf-8")
+        with self.assertRaises(SystemExit) as ctx:
+            _parity.main(_args(left=str(plan), right=str(plan), output=str(_tmp("out.json"))))
+        self.assertNotEqual(ctx.exception.code, 2)
+        self.assertIn("verdicts", str(ctx.exception))
+
+    def test_prompt_hash_mismatch_exits_2_and_writes_nothing(self):
         left, right = self._pair(right_over={"prompt_hash": "tampered"})
         out = _tmp("should_not_exist.json")
         with self.assertRaises(SystemExit) as ctx:
             _parity.main(_args(left=str(left), right=str(right), output=str(out)))
-        self.assertNotEqual(ctx.exception.code, 0)
-        self.assertIn("prompt_hash", str(ctx.exception))
+        self.assertEqual(ctx.exception.code, _parity.EXIT_REFUSED)
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertIn("prompt_hash", ctx.exception.message)
         self.assertFalse(out.exists())
 
     def test_every_mismatch_is_named(self):
@@ -251,7 +260,8 @@ class TestIdGate(unittest.TestCase):
         out = _tmp("should_not_exist.json")
         with self.assertRaises(SystemExit) as ctx:
             _parity.main(_args(left=str(left), right=str(right), output=str(out)))
-        self.assertIn(dropped, str(ctx.exception))
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertIn(dropped, ctx.exception.message)
         self.assertFalse(out.exists())
 
 
@@ -392,6 +402,7 @@ class TestLabels(unittest.TestCase):
         right = _write_run("right.json", self.verdicts, _meta())
         with self.assertRaises(SystemExit) as ctx:
             _compare(left, right, labels=str(staged_path))
+        self.assertNotEqual(ctx.exception.code, 2)  # a labels error, not a parity refusal
         self.assertIn("--allow-staged", str(ctx.exception))
         result = _compare(left, right, labels=str(staged_path), allow_staged=True)
         self.assertIn("proposed", result["labels"]["source"])
@@ -404,6 +415,7 @@ class TestLabels(unittest.TestCase):
         right = _write_run("right.json", verdicts, _meta())
         with self.assertRaises(SystemExit) as ctx:
             _compare(left, right, labels=str(self.corpus_path))
+        self.assertNotEqual(ctx.exception.code, 2)  # a labels error, not a parity refusal
         self.assertIn("ghost", str(ctx.exception))
 
     def test_labelled_records_without_verdicts_are_excluded_and_listed(self):

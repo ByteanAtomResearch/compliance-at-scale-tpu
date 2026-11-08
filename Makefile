@@ -8,7 +8,8 @@ DATA        ?= sample_data/llm_outputs.jsonl
 PORT        ?= 8000
 CONCURRENCY ?= 10
 
-.PHONY: help setup verify batch serve client client-concurrent demo trajectory score bands test clean
+.PHONY: help setup verify batch serve client client-concurrent demo trajectory score bands \
+	misreport-review-files misreport-corpus misreport-bands misreport-run parity bridge test clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -64,6 +65,49 @@ score: ## Score judge vs rules baseline (no TPU)
 
 bands: ## Emit corpus token distribution + band proposal (no TPU)
 	python 05_trajectory_eval/bands.py --corpus sample_data/trajectories.jsonl
+
+# ── Module 6: Misreported State on TorchTPU (Part 3) ───────
+MISREPORT_MODEL ?= RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic
+MISREPORT_DIR   ?= 06_misreported_state_torchtpu
+BACKEND         ?=
+
+misreport-review-files: ## Rebuild 06's staged review files from the tier-2 batch (no TPU)
+	python $(MISREPORT_DIR)/build_review_files.py
+
+misreport-corpus: ## Concatenate 05's adjudicated corpus and 06's tamper corpus (after Lab C)
+	mkdir -p results
+	cat sample_data/trajectories.jsonl $(MISREPORT_DIR)/data/tamper_corpus.jsonl > results/06_eval_corpus.jsonl
+	wc -l results/06_eval_corpus.jsonl
+
+misreport-bands: ## 26B band report for the 06 eval corpus (no TPU; needs transformers + HF auth)
+	python 05_trajectory_eval/bands.py \
+		--corpus results/06_eval_corpus.jsonl \
+		--tokenizer $(MISREPORT_MODEL) \
+		--output results/06_band_report_26b.json
+
+misreport-run: ## Eval-set run on TPU (BACKEND=jax|torchtpu, ARGS="--dtype auto --limit 2 --dry-run")
+	$(if $(BACKEND),,$(error BACKEND=jax|torchtpu is required))
+	python $(MISREPORT_DIR)/run.py \
+		--backend $(BACKEND) \
+		--model $(MISREPORT_MODEL) \
+		--input results/06_eval_corpus.jsonl \
+		--bands-report results/06_band_report_26b.json \
+		--eval-set \
+		--output results/06_verdicts_$(BACKEND).json \
+		$(ARGS)
+
+parity: ## Compare the jax and torchtpu verdicts; refuses on any config difference (no TPU)
+	python $(MISREPORT_DIR)/parity.py \
+		--left results/06_verdicts_jax.json --left-name jax \
+		--right results/06_verdicts_torchtpu.json --right-name torchtpu \
+		--labels results/06_eval_corpus.jsonl \
+		--output results/06_parity.json
+
+bridge: ## Turn the torchtpu verdicts into rai-checklist-cli Markdown + YAML (no TPU)
+	python $(MISREPORT_DIR)/bridge.py \
+		--verdicts results/06_verdicts_torchtpu.json \
+		--markdown results/06_report.md \
+		--yaml results/06_report.yaml
 
 # ── Utilities ──────────────────────────────────────────────
 test: ## Run unit tests (no TPU hardware required)

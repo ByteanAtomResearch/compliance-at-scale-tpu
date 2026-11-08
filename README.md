@@ -126,6 +126,16 @@ If you lack GCE access, see the Colab TPU v2 fallback note in `01_setup/README.m
 │   ├── score.py                         → Judge vs rules (no TPU)
 │   ├── freeze.py + FROZEN.md            → Schema/prompt/band freeze record
 │   └── README.md
+├── 06_misreported_state_torchtpu/       Module 6: Misreported state on TorchTPU (Part 3)
+│   ├── lab05.py                         → Loads 05 by path, one class identity
+│   ├── run.py                           → 05's judge; backend recorded and checked
+│   ├── parity.py                        → jax vs torchtpu agreement, kappa, guard
+│   ├── bridge.py                        → Verdicts → rai-checklist-cli shapes
+│   ├── build_review_files.py            → Cuts the 60 + 14 review records
+│   ├── xla_cache.sh                     → XLA cache push/restore per backend
+│   ├── data/staging/                    → Tamper drafts + review files (pre-adjudication)
+│   ├── published/                       → Committed Part 3 result files
+│   └── README.md
 ├── notebooks/
 │   ├── tutorial_colab.ipynb             → Part 1 Colab fallback
 │   └── trajectory_colab.ipynb           → Part 2 free-tier demo
@@ -136,7 +146,8 @@ If you lack GCE access, see the Colab TPU v2 fallback note in `01_setup/README.m
 │   └── trajectories.jsonl               → Scored corpus (adjudicated only)
 └── tests/
     ├── test_pure_functions.py           → Unit tests (no TPU required)
-    └── test_trajectory_*.py             → Module 5 unit tests
+    ├── test_trajectory_*.py             → Module 5 unit tests
+    └── test_misreport_*.py              → Module 6 unit tests
 ```
 
 ## Quick start
@@ -164,6 +175,12 @@ make demo
 make trajectory ARGS="--band all --repeat 3"   # timed sweep on TPU
 make score                                     # judge vs rules baseline (no TPU)
 make bands                                     # token distribution + band proposal (no TPU)
+
+# Part 3: misreported state on TorchTPU (Module 6)
+make misreport-run BACKEND=jax                 # eval-set run inside the vllm-tpu container
+make misreport-run BACKEND=torchtpu            # same corpus and bands, inside the vllm-torchtpu venv
+make parity                                    # agreement + kappa; refuses on any config difference (no TPU)
+make bridge                                    # verdicts -> rai-checklist-cli Markdown + YAML (no TPU)
 
 # Run unit tests (no TPU required)
 make test
@@ -253,6 +270,14 @@ Part 1 evaluated single LLM outputs. Part 2 (`05_trajectory_eval/`) evaluates th
 A Gemma judge under vLLM structured outputs is compared per state against a deterministic rules baseline, on a human-adjudicated corpus with length-banded batching for the XLA static-shape model. See [05_trajectory_eval/README.md](05_trajectory_eval/README.md) for the module walkthrough, the adjudication protocol, the truncation design, and the instrumentation dependency table.
 
 Measured results (throughput by band, judge versus rules per state, instrumentation dependency, hosted break-even) are `[MEASURED: pending]` until the TPU runs complete; they publish with the Part 2 article and land in the module README's results table.
+
+## Part 3: Misreported state on TorchTPU
+
+Part 3 (`06_misreported_state_torchtpu/`, lab module 06) asks two things Part 2 does not. First, does the judge catch the misreport shapes 05's generator never plants: a final report that denies what the steps did, and a denial when the agent is asked directly? An eight-record hand-authored tamper set, three of them hard negatives, carries that question. Second, does the same judge on the same checkpoint give the same verdicts on vLLM-TorchTPU as on JAX vllm-tpu?
+
+`run.py` runs 05's judge on a declared backend and records it in the run log, together with the commit that ran. `parity.py` compares two runs state by state with Cohen's kappa and refuses to compare runs that differ in anything but the backend. `bridge.py` turns verdicts into the rai-checklist-cli shapes from Module 4, with operator policy kept apart from the findings. 05 is imported by path and never modified. See [06_misreported_state_torchtpu/README.md](06_misreported_state_torchtpu/README.md) for the labs, the tamper set and the guardrails the module was built under.
+
+Measured results are `[MEASURED: pending]` until the TPU runs complete; they publish with the Part 3 article and land in `06_misreported_state_torchtpu/published/`.
 
 ## Citing this tutorial
 

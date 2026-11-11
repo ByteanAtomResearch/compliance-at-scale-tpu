@@ -142,6 +142,41 @@ gcloud compute instances delete p3-smoke --project=PROJECT_ID --zone=us-east5-a
 
 **Stop rule:** if either backend fails, the lab pauses here. That error decides whether 06 stays on 26B-A4B, and it goes in the post as a result.
 
+### Parity fallback: if JAX cannot load 26B-A4B FP8
+
+This covers one outcome of the smoke test: TorchTPU loads `RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic` and the JAX `vllm/vllm-tpu:gemma4` container does not. The load error goes in the post as a result, and the plan changes in two ways.
+
+1. Parity runs on Gemma 4 E4B (`google/gemma-4-E4B-it`, the model 05 uses) on both backends. `parity.py` refuses two runs whose `model` differs, so a 26B run on TorchTPU can never be compared with an E4B run on JAX. The cross-backend claim becomes a claim about E4B, and every parity table says so in its caption.
+2. 26B stays TorchTPU-only. It still gets its eval-set run, its `score.py` tables against the labels and the rules, and its bridge report. It gets no jax column and no parity file.
+
+The E4B runs use their own band report and their own output names, so they never overwrite the 26B files. E4B is not an FP8 checkpoint, so `--dtype` stays at its default, `bfloat16`, which is 05's value:
+
+```bash
+export E4B=google/gemma-4-E4B-it
+python 05_trajectory_eval/bands.py --corpus results/06_eval_corpus.jsonl \
+  --tokenizer "$E4B" --output results/06_band_report_e4b.json
+
+# In the vllm-torchtpu venv:
+python 06_misreported_state_torchtpu/run.py --backend torchtpu --model "$E4B" \
+  --input results/06_eval_corpus.jsonl --bands-report results/06_band_report_e4b.json \
+  --eval-set --output results/06_verdicts_e4b_torchtpu.json
+
+# In the vllm-tpu container:
+python 06_misreported_state_torchtpu/run.py --backend jax --model "$E4B" \
+  --input results/06_eval_corpus.jsonl --bands-report results/06_band_report_e4b.json \
+  --eval-set --output results/06_verdicts_e4b_jax.json
+
+# On your machine:
+python 06_misreported_state_torchtpu/parity.py \
+  --left results/06_verdicts_e4b_jax.json --left-name jax \
+  --right results/06_verdicts_e4b_torchtpu.json --right-name torchtpu \
+  --labels results/06_eval_corpus.jsonl --output results/06_parity_e4b.json
+```
+
+The 26B run is `make misreport-run BACKEND=torchtpu` as in Lab G, with whichever `--dtype` the smoke test settled on passed through `ARGS`. Under the fallback, skip `make parity`: it expects a 26B jax file that will not exist. Copy `06_parity_e4b.json`, `06_band_report_e4b.json` and the two `06_verdicts_e4b_*.json` files into `published/` beside the 26B files.
+
+The fallback is not symmetric. If TorchTPU is the backend that fails to load 26B, the stop rule above holds and the decision is yours. Whether E4B loads under vllm-torchtpu on a v6e-4 is also unmeasured, so smoke-test it the Lab A way (two records, both backends) before any eval-set run.
+
 ## Lab B: scaffold 06 and stage its inputs
 
 **Objective:** create the 06 folder and its staged inputs, check them with 05's own loader and rules, and leave 05 untouched.
@@ -391,6 +426,8 @@ cp results/06_verdicts_*.json results/06_score_*.json results/06_parity.json \
 
 **Exercise:** 05's README recorded a prediction before any judge run: the judge recovers some `policy_withheld` positives that the rules recover none of. Check it against both backends' runs, and say whether the withheld records you adjudicated let you call it.
 
+**If the parity fallback is in force** (Lab A: JAX could not load 26B-A4B FP8), the jax half of this lab runs on E4B. Follow the commands under "Parity fallback" in Lab A, then score and bridge the 26B TorchTPU run on its own: run the `score.py` loop for `torchtpu` only, and `make bridge`.
+
 **Stop rule:** a run with unrecorded provenance never feeds a published table. Rerun it pinned.
 
 ## The tamper set
@@ -414,6 +451,8 @@ The hard negatives are what give precision meaning. Without them, a judge that f
 
 Every number here is `[MEASURED: pending]` until the Lab G files exist in `published/`. Each table names the file and key it will cite, so nothing can enter the post from memory.
 
+Under the parity fallback, Tables 2, 5 and 6 cite `published/06_parity_e4b.json` with the same keys and name E4B in their captions, and Tables 3 and 4 carry a torchtpu column only for 26B. No table mixes the two models.
+
 **Table 1: Smoke test (Lab A).** Per backend: loads (yes/no), `parse_errors`, first-compile minutes. Source: `published/smoke_*.json` metadata and the smoke logs. `[MEASURED: pending]`
 
 **Table 2: Per-state agreement, jax vs torchtpu.** Per state: n, agree, rate with Wilson interval, kappa, left and right positives, flags. Source: `published/06_parity.json`, key `agreement.<state>`. The determinism control for each backend sits beside it, from two more parity files. `[MEASURED: pending]`
@@ -429,6 +468,7 @@ Every number here is `[MEASURED: pending]` until the Lab G files exist in `publi
 ## What is not grounded yet
 
 - Whether the 26B-A4B FP8 checkpoint serves on a v6e-4 under either backend. Lab A answers it.
+- Whether the parity fallback is needed, and whether E4B loads under vllm-torchtpu on a v6e-4 if it is. Only the fallback's commands have been checked, as dry runs on a laptop.
 - Whether xgrammar structured outputs hold up on Gemma 4 under vllm-torchtpu. Its own tests cover them on a small Qwen model only. `run.py` counts parse errors and never repairs or retries, so a malformation rate becomes a finding.
 - What to record as `CONTAINER_IMAGE_DIGEST` for the TorchTPU venv. 05's metadata assumes a container. Hashing `uv pip freeze` is a suggestion, not 05's rule.
 - The `bands.py --tokenizer` path for the 26B checkpoint needs a Hugging Face token. The tests and the Lab D plan diff use a whitespace tokenizer stand-in so they run anywhere.

@@ -9,7 +9,8 @@ PORT        ?= 8000
 CONCURRENCY ?= 10
 
 .PHONY: help setup verify batch serve client client-concurrent demo trajectory score bands \
-	misreport-review-files misreport-corpus misreport-bands misreport-run parity bridge test clean
+	misreport-review-files misreport-rehearsal misreport-corpus misreport-bands misreport-run parity bridge \
+	test clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -73,6 +74,9 @@ BACKEND         ?=
 
 misreport-review-files: ## Rebuild 06's staged review files from the tier-2 batch (no TPU)
 	python $(MISREPORT_DIR)/build_review_files.py
+
+misreport-rehearsal: ## Rehearse every laptop-only 06 step on fixtures; fails on any mismatch (no TPU)
+	python $(MISREPORT_DIR)/rehearsal.py
 
 misreport-corpus: ## Concatenate 05's adjudicated corpus and 06's tamper corpus (after Lab C)
 	mkdir -p results

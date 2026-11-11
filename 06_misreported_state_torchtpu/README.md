@@ -15,6 +15,7 @@ Everything else is 05's. 06 imports 05's schema, corpus loader, prompts, band se
 | `parity.py` | Compares two verdict files state by state: agreement, Cohen's kappa, precision and recall deltas with `--labels`. Refuses to compare runs that differ in anything but the backend. |
 | `bridge.py` | Turns a verdict file into the Markdown and YAML shapes Module 04 feeds to rai-checklist-cli, for the six states, with operator policy in its own block. |
 | `build_review_files.py` | Cuts the 60-record review file and the 14-record policy_withheld top-up from `sample_data/staging/candidates_tier2_batch1.jsonl` by id. `--check` proves the committed files match. |
+| `rehearsal.py` | `make misreport-rehearsal`: runs every laptop-only step of Labs B, D, E and F, with fixture verdicts standing in for judge runs, and exits 1 on any mismatch. |
 | `xla_cache.sh` | XLA cache push and restore under a per-backend GCS prefix. 05's `cache_helper.sh` hardcodes `part2`. |
 | `data/staging/` | The 8 tamper drafts, the 60 review records, the 14 top-up records. Unreviewed, like `sample_data/staging/`. |
 | `data/tamper_corpus.jsonl`, `data/tamper_rejections.jsonl` | Created by `adjudicate.py --corpus --rejections` during review. Not committed until then. |
@@ -22,7 +23,7 @@ Everything else is 05's. 06 imports 05's schema, corpus loader, prompts, band se
 
 `parity.py` and `bridge.py` exit 2 when they refuse their inputs (a guard or a validation failure) and 1 on any other error, so a script can tell a refusal from a crash.
 
-Tests live beside 05's in `tests/`: `test_misreport_data.py`, `test_misreport_runner.py`, `test_misreport_parity.py`, `test_misreport_bridge.py`. `make test` runs 266 tests on this branch, 181 of them 05's, with no TPU and no vllm.
+Tests live beside 05's in `tests/`: `test_misreport_data.py`, `test_misreport_runner.py`, `test_misreport_parity.py`, `test_misreport_bridge.py`. `test_misreport_rehearsal.py` covers the rehearsal. `make test` runs 278 tests on this branch, 181 of them 05's, with no TPU and no vllm.
 
 ## What `--backend` may and may not do
 
@@ -46,9 +47,522 @@ make test
 git diff --stat main -- 05_trajectory_eval 04_integration_demo
 ```
 
-Checkpoint: the test run ends in `OK` with 266 tests, and the diff prints nothing.
+Checkpoint: the test run ends in `OK` with 278 tests, and the diff prints nothing.
 
 Every lab below has the same five parts: an objective, a prediction you write down before running, one deliberate failure, a checkpoint you do not move past, and an exercise answered against 05's own code or results.
+
+## Run it end to end
+
+Labs A to G in order, as a runbook. Every block is copy-pasteable from the repo root, and every step carries one tag saying what it needs:
+
+| Tag | Meaning |
+| --- | --- |
+| `laptop` | Runs on your machine in the local venv. No TPU, no token, no cost. |
+| `HF_TOKEN` | Needs a Hugging Face token with access to the gated Gemma weights or tokenizer. |
+| `TPU` | Needs the v6e-4 VM, and so costs money. An agent asks before any `gcloud` command that creates, starts or deletes a resource. |
+| `human` | Only you do this. No agent labels a record, freezes Part 2, or pushes a tag. |
+
+Each "Observed" line was read off a real run on this branch on Nov 11, 2026. Each "Expect" line is the message the code prints, for a step that has not been run yet because it needs a TPU, a token or your review. No "Expect" line is a result.
+
+### Step 0: setup and rehearsal
+
+**0.1 `laptop`** Build the venv and run the tests.
+
+```bash
+git checkout part3-module06
+uv venv --python 3.12 .venv-local && source .venv-local/bin/activate
+uv pip install rich pyyaml
+make test
+git diff --stat main -- 05_trajectory_eval 04_integration_demo
+```
+
+Observed: `Ran 278 tests` then `OK`; the diff prints nothing.
+
+**0.2 `laptop`** Rehearse every laptop-only step of Labs B, D, E and F in one command. It exits 1 on any mismatch.
+
+```bash
+make misreport-rehearsal
+```
+
+Observed: `Rehearsal passed: 6 of 6 steps, no TPU, no judge.`
+
+The rehearsal writes plans and fixture verdict files under `results/rehearsal/`. The fixtures are built from the tamper drafts' proposed labels with one disagreement planted. No judge produced them, they are marked `rehearsal_fixture`, and they never go into `published/`. Steps D.2, E.1, E.2, F.1 and F.2 below reuse them, so run 0.2 first.
+
+### Lab A: smoke test
+
+Set these once in the shell you run `gcloud` from:
+
+```bash
+export PROJECT_ID=your-project ZONE=us-east5-a
+```
+
+**A.1 `TPU` `human`** Create the VM. FLEX_START can sit in `PENDING` for up to the two hours requested.
+
+```bash
+gcloud compute instances create p3-smoke \
+  --project="$PROJECT_ID" --zone="$ZONE" \
+  --machine-type=ct6e-standard-4t \
+  --provisioning-model=FLEX_START \
+  --request-valid-for-duration=2h --max-run-duration=4h \
+  --instance-termination-action=DELETE \
+  --image-project=ubuntu-os-accelerator-images \
+  --image-family=ubuntu-accel-2204-amd64-tpu-v5e-v5p-v6e \
+  --maintenance-policy=TERMINATE
+```
+
+Expect: a table row for `p3-smoke` with `STATUS` `RUNNING` once capacity is granted.
+
+**A.2 `TPU`** Check the chips.
+
+```bash
+gcloud compute ssh p3-smoke --project="$PROJECT_ID" --zone="$ZONE" \
+  --command='ls -l /dev/vfio/ && ls -l /dev/accel* 2>/dev/null; echo "---"; lsmod | grep -i vfio'
+```
+
+Expect: device entries under `/dev/vfio/` and at least one `vfio` module line after `---`.
+
+**A.3 `TPU` `HF_TOKEN`** Open a shell on the VM and install. Everything from here to A.7 runs on the VM.
+
+```bash
+gcloud compute ssh p3-smoke --project="$PROJECT_ID" --zone="$ZONE"
+```
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh && export PATH="$HOME/.local/bin:$PATH"
+uv venv --python 3.12 ~/torchtpu && source ~/torchtpu/bin/activate
+export UV_TORCH_BACKEND=cpu
+uv pip install vllm-torchtpu rich transformers
+git clone https://github.com/ByteanAtomResearch/compliance-at-scale-tpu.git
+cd compliance-at-scale-tpu && git checkout part3-module06
+export MODEL=RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic TPU_CHIPS=4
+export STAGED=sample_data/staging/candidates_tier2_batch1.jsonl
+export HF_TOKEN="hf_..."
+uv pip list | grep -i vllm
+```
+
+Expect: one `vllm-torchtpu` line and no `vllm-tpu` line.
+
+**A.4 `TPU`** Deliberate failure: dry-run with no band report.
+
+```bash
+python 05_trajectory_eval/batch_trajectory_eval.py --model "$MODEL" --staged \
+  --input "$STAGED" --limit 2 --dry-run --output results/smoke_plan.json
+```
+
+Observed (on a laptop; the command needs no TPU): `FileNotFoundError: [Errno 2] No such file or directory: 'results/band_report.json'`
+
+**A.5 `TPU` `HF_TOKEN`** Build the throwaway band report with the 26B tokenizer.
+
+```bash
+python 05_trajectory_eval/bands.py --staged --corpus "$STAGED" \
+  --tokenizer "$MODEL" --output results/smoke_bands.json
+```
+
+Expect: `Band report written to results/smoke_bands.json`
+
+**A.6 `TPU`** Dry-run, which imports no vllm.
+
+```bash
+python 05_trajectory_eval/batch_trajectory_eval.py --model "$MODEL" --staged \
+  --input "$STAGED" --bands-report results/smoke_bands.json --limit 2 \
+  --dry-run --output results/smoke_plan.json
+```
+
+Expect: `Plan written to results/smoke_plan.json. No TPU run occurred.` with band lines that add up to 12 prompts.
+
+**A.7 `TPU` `HF_TOKEN`** Two records on TorchTPU, then the same two on JAX in the container.
+
+```bash
+export VLLM_XLA_CACHE_PATH=~/xla_cache_torchtpu
+python 05_trajectory_eval/batch_trajectory_eval.py --model "$MODEL" --staged \
+  --input "$STAGED" --bands-report results/smoke_bands.json --limit 2 \
+  --eval-set --output results/smoke_torchtpu.json 2>&1 | tee results/smoke_torchtpu.log
+
+deactivate
+sudo docker run --rm --privileged --net=host --shm-size=16g \
+  -v "$PWD":/work -w /work -e TPU_CHIPS=4 -e HF_TOKEN="$HF_TOKEN" \
+  --entrypoint bash vllm/vllm-tpu:gemma4 -c \
+  "pip install -q rich && python 05_trajectory_eval/batch_trajectory_eval.py \
+   --model RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic --staged \
+   --input sample_data/staging/candidates_tier2_batch1.jsonl \
+   --bands-report results/smoke_bands.json --limit 2 --eval-set \
+   --output results/smoke_jax.json 2>&1 | tee results/smoke_jax.log"
+grep -h parse_errors results/smoke_torchtpu.json results/smoke_jax.json
+```
+
+Expect: `Results written to results/smoke_torchtpu.json`, then `Results written to results/smoke_jax.json`, then two `"parse_errors": 0` lines.
+
+If the JAX run cannot load the checkpoint and the TorchTPU run can, the parity fallback under Lab A applies from here on. If TorchTPU cannot load it, stop: that decision is yours.
+
+**A.8 `TPU` `human`** Leave the VM, copy the results back, delete the VM. `results/smoke` must not exist yet, or `scp` nests the folder.
+
+```bash
+exit
+ls results/smoke 2>/dev/null && echo "results/smoke exists: move it first"
+gcloud compute scp --recurse p3-smoke:~/compliance-at-scale-tpu/results ./results/smoke \
+  --project="$PROJECT_ID" --zone="$ZONE"
+gcloud compute instances delete p3-smoke --project="$PROJECT_ID" --zone="$ZONE"
+ls results/smoke
+```
+
+Expect: `smoke_bands.json`, `smoke_plan.json`, `smoke_torchtpu.json`, `smoke_torchtpu.log`, `smoke_jax.json` and `smoke_jax.log` in the listing.
+
+### Lab B: staged inputs
+
+**B.1 `laptop`** Prove the committed review files match the staged batch.
+
+```bash
+python 06_misreported_state_torchtpu/build_review_files.py --check
+wc -l 06_misreported_state_torchtpu/data/staging/*.jsonl
+```
+
+Observed: `Review files match a rebuild from` the staged batch's path, then line counts of 8, 60 and 14, `82 total`.
+
+**B.2 `laptop`** Load the tamper drafts with 05's loader.
+
+```bash
+python 05_trajectory_eval/corpus.py \
+  --staged 06_misreported_state_torchtpu/data/staging/candidates_tamper_batch1.jsonl
+```
+
+Observed: `Staged candidates: 8 (8 awaiting adjudication)`. Before Lab C the scored-corpus table above it reads `Total records: 0`.
+
+**B.3 `laptop`** Run 05's rules over the drafts.
+
+```bash
+python 05_trajectory_eval/rules_baseline.py --staged \
+  --input 06_misreported_state_torchtpu/data/staging/candidates_tamper_batch1.jsonl \
+  --output results/tamper_rules.json
+```
+
+Observed: `Evaluated 8 records: 1 flagged, 7 clean.` then `authorization_bypass: 1`.
+
+**B.4 `human`** Read the pending count on the 60, then press `q` at the first prompt.
+
+```bash
+python 05_trajectory_eval/adjudicate.py --adjudicator noble \
+  --staged 06_misreported_state_torchtpu/data/staging/candidates_tier2_cut60.jsonl
+```
+
+Observed: `60 candidates pending (60 staged, 0 already decided)`
+
+**B.5 `laptop`** Deliberate failure: feed the loader the tamper file twice.
+
+```bash
+cat 06_misreported_state_torchtpu/data/staging/candidates_tamper_batch1.jsonl{,} > /tmp/dup.jsonl
+python 05_trajectory_eval/corpus.py --staged /tmp/dup.jsonl
+```
+
+Observed: `CorpusIntegrityError: /tmp/dup.jsonl: duplicate record ids` followed by all eight `traj-t3-tmp-00N` ids.
+
+### Lab C: adjudicate and freeze
+
+**C.1 `human`** Days 1 and 2: the 60 positives. Quit after 30; decided records are skipped next time.
+
+```bash
+python 05_trajectory_eval/adjudicate.py --adjudicator noble \
+  --staged 06_misreported_state_torchtpu/data/staging/candidates_tier2_cut60.jsonl
+```
+
+Expect: the session opens with `N candidates pending (60 staged, M already decided)`, and N falls to 0 over the two days.
+
+**C.2 `human`** Day 3: the clean spot-check, the tamper set, the 14 policy pairs.
+
+```bash
+python 05_trajectory_eval/adjudicate.py --adjudicator noble --sample 0.2 \
+  --staged sample_data/staging/candidates_tier2_batch1.jsonl
+python 05_trajectory_eval/adjudicate.py --adjudicator noble \
+  --staged 06_misreported_state_torchtpu/data/staging/candidates_tamper_batch1.jsonl \
+  --corpus 06_misreported_state_torchtpu/data/tamper_corpus.jsonl \
+  --rejections 06_misreported_state_torchtpu/data/tamper_rejections.jsonl
+python 05_trajectory_eval/adjudicate.py --adjudicator noble \
+  --staged 06_misreported_state_torchtpu/data/staging/candidates_tier2_topup14.jsonl
+wc -l sample_data/trajectories.jsonl 06_misreported_state_torchtpu/data/tamper_corpus.jsonl
+```
+
+Expect: the tamper session opens with `8 candidates pending (8 staged, 0 already decided)`, and `wc` shows at most 8 lines in the tamper corpus.
+
+**C.3 `human` `HF_TOKEN`** Freeze day, on `main`. `bands.py` needs the E4B tokenizer. Use the date you freeze on.
+
+```bash
+git checkout main
+uv pip install transformers
+python 05_trajectory_eval/bands.py
+python 05_trajectory_eval/freeze.py --bands results/band_report.json --freeze-date 2026-11-11
+grep -n "FROZEN\|Freeze date" 05_trajectory_eval/FROZEN.md | head
+```
+
+Expect: `Band report written to results/band_report.json`, and a `FROZEN.md` status line that reads `FROZEN`, no longer `PRE-FREEZE DRAFT`.
+
+**C.4 `human`** Commit the adjudicated corpus and the freeze on `main` as two commits, and push. The tag is cut here, on your machine, before any 06 code reaches `main`.
+
+```bash
+git add sample_data/
+git commit -m "data: adjudicated Part 2 corpus"
+git add 05_trajectory_eval/FROZEN.md
+git commit -m "docs(05): freeze Part 2"
+git push origin main
+git tag v2.0-part2 && git push origin v2.0-part2
+```
+
+Expect: `git log --oneline -2` shows the two commits, and `git status --short` shows nothing under `05_trajectory_eval/`.
+
+**C.5 `laptop`** Bring the freeze into this branch with a merge. Never rebase this branch and never force-push it; run logs stamp commit SHAs.
+
+```bash
+git checkout part3-module06
+git merge main
+git diff --stat main -- 05_trajectory_eval 04_integration_demo
+make test
+```
+
+Expect: the merge completes, the diff prints nothing, and the tests end in `OK`.
+
+**C.6 `human`** Commit the tamper corpus on this branch and push, so the VM in Lab G can clone it.
+
+```bash
+git add 06_misreported_state_torchtpu/data/
+git commit -m "data(06): adjudicated tamper corpus"
+git push origin part3-module06
+```
+
+Expect: `git status --short` prints nothing.
+
+**C.7 `laptop`** Deliberate failure: freeze against the smoke band report, to a scratch path.
+
+```bash
+python 05_trajectory_eval/freeze.py --bands results/smoke/smoke_bands.json \
+  --freeze-date 2026-11-11 --out /tmp/FROZEN_test.md
+head -5 /tmp/FROZEN_test.md
+```
+
+Expect: `PRE-FREEZE DRAFT` in the status line. Needs the Lab A files.
+
+### Lab D: the backend-aware runner
+
+**D.1 `laptop`**
+
+```bash
+make test
+```
+
+Observed: `Ran 278 tests` then `OK`.
+
+**D.2 `laptop`** Dry-run 06's runner and compare its plan with 05's. This uses the stand-in band report and 05 plan that step 0.2 wrote.
+
+```bash
+python 06_misreported_state_torchtpu/run.py --backend torchtpu --dtype auto \
+  --model RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic --staged \
+  --input sample_data/staging/candidates_tier2_batch1.jsonl \
+  --bands-report results/rehearsal/stand_in_bands_tier2.json --limit 2 --dry-run \
+  --output results/run06_plan.json
+python -c "import json,sys; a,b=[json.load(open(p))['plan'] for p in sys.argv[1:]]; print('identical' if a==b else 'DIFFERENT')" \
+  results/rehearsal/plan05.json results/run06_plan.json
+```
+
+Observed: `Plan written to results/run06_plan.json. No TPU run occurred.` then `identical`. The plan was 2 records, 12 prompts, with `vllm_distribution` recorded as `unchecked (dry run)`.
+
+**D.3 `laptop`** The same comparison against the real 26B band report, once the Lab A files are in `results/smoke/`.
+
+```bash
+python 06_misreported_state_torchtpu/run.py --backend torchtpu --dtype auto \
+  --model RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic --staged \
+  --input sample_data/staging/candidates_tier2_batch1.jsonl \
+  --bands-report results/smoke/smoke_bands.json --limit 2 --dry-run \
+  --output results/run06_plan_smoke.json
+python -c "import json,sys; a,b=[json.load(open(p))['plan'] for p in sys.argv[1:]]; print('identical' if a==b else 'DIFFERENT')" \
+  results/smoke/smoke_plan.json results/run06_plan_smoke.json
+```
+
+Expect: `identical`
+
+### Lab E: the parity scorer
+
+**E.1 `laptop`** Compare the two fixture verdict files from step 0.2.
+
+```bash
+python 06_misreported_state_torchtpu/parity.py \
+  --left results/rehearsal/fixture_verdicts_jax.json --left-name jax \
+  --right results/rehearsal/fixture_verdicts_torchtpu.json --right-name torchtpu \
+  --output results/rehearsal/parity_by_hand.json
+```
+
+Observed: `Parity report written to results/rehearsal/parity_by_hand.json`. The rehearsal's own run of this comparison found 47 of 48 decisions in agreement, the one planted disagreement.
+
+**E.2 `laptop`** Deliberate failure: one changed hash.
+
+```bash
+python 06_misreported_state_torchtpu/parity.py \
+  --left results/rehearsal/fixture_verdicts_jax.json \
+  --right results/rehearsal/fixture_tampered.json \
+  --output results/rehearsal/parity_should_not_exist.json; echo "exit=$?"
+ls results/rehearsal/parity_should_not_exist.json
+```
+
+Observed: `refusing to compare: the two runs differ in more than the backend`, a line naming `prompt_hash`, `exit=2`, and `ls` reports no such file.
+
+**E.3 `laptop`** The real comparison, on the Lab A smoke verdicts.
+
+```bash
+python 06_misreported_state_torchtpu/parity.py \
+  --left results/smoke/smoke_jax.json --left-name jax \
+  --right results/smoke/smoke_torchtpu.json --right-name torchtpu \
+  --output results/smoke_parity.json
+```
+
+Expect: `Parity report written to results/smoke_parity.json`, covering 12 state decisions.
+
+### Lab F: the bridge
+
+**F.1 `laptop`** Render the torchtpu fixture.
+
+```bash
+python 06_misreported_state_torchtpu/bridge.py \
+  --verdicts results/rehearsal/fixture_verdicts_torchtpu.json \
+  --markdown results/rehearsal/report_by_hand.md --yaml results/rehearsal/report_by_hand.yaml
+head -8 results/rehearsal/report_by_hand.yaml
+```
+
+Observed: two `Wrote` lines, a six-row section table, and a YAML that opens with `rai_evaluation:` then `Scope Violation:`.
+
+**F.2 `laptop`** Deliberate failure: a state 05 does not know.
+
+```bash
+python 06_misreported_state_torchtpu/bridge.py \
+  --verdicts results/rehearsal/fixture_bad_state.json --yaml /tmp/bad.yaml; echo "exit=$?"
+```
+
+Observed: `verdict for traj-t3-tmp-001 is invalid: unknown violation state 'vibes'` and `exit=2`.
+
+**F.3 `laptop`** The real report, on the Lab A smoke verdicts.
+
+```bash
+python 06_misreported_state_torchtpu/bridge.py \
+  --verdicts results/smoke/smoke_torchtpu.json \
+  --markdown results/smoke_report.md --yaml results/smoke_report.yaml
+```
+
+Expect: `Wrote results/smoke_report.md` and `Wrote results/smoke_report.yaml`.
+
+### Lab G: the true runs
+
+**G.1 `TPU` `human`** Create the eval VM, with a longer run limit than the smoke VM.
+
+```bash
+gcloud compute instances create p3-eval \
+  --project="$PROJECT_ID" --zone="$ZONE" \
+  --machine-type=ct6e-standard-4t \
+  --provisioning-model=FLEX_START \
+  --request-valid-for-duration=2h --max-run-duration=12h \
+  --instance-termination-action=DELETE \
+  --image-project=ubuntu-os-accelerator-images \
+  --image-family=ubuntu-accel-2204-amd64-tpu-v5e-v5p-v6e \
+  --maintenance-policy=TERMINATE
+gcloud compute ssh p3-eval --project="$PROJECT_ID" --zone="$ZONE"
+```
+
+Expect: `STATUS` `RUNNING`, then a shell on the VM.
+
+**G.2 `TPU` `HF_TOKEN`** On the VM: install, pin provenance, build the corpus and the 26B band report.
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh && export PATH="$HOME/.local/bin:$PATH"
+uv venv --python 3.12 ~/torchtpu && source ~/torchtpu/bin/activate
+export UV_TORCH_BACKEND=cpu
+uv pip install vllm-torchtpu rich transformers
+git clone https://github.com/ByteanAtomResearch/compliance-at-scale-tpu.git
+cd compliance-at-scale-tpu && git checkout part3-module06
+export MODEL=RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic TPU_CHIPS=4
+export HF_TOKEN="hf_..."
+export MODEL_REVISION=$(python -c "from huggingface_hub import model_info; print(model_info('$MODEL').sha)")
+export CONTAINER_IMAGE_DIGEST=$(uv pip freeze | sha256sum | cut -d' ' -f1)
+echo "$MODEL_REVISION $CONTAINER_IMAGE_DIGEST"
+make misreport-corpus
+make misreport-bands
+```
+
+Expect: a 40-character revision and a 64-character digest, a `results/06_eval_corpus.jsonl` line count equal to the two corpora added together, then `Band report written to results/06_band_report_26b.json`.
+
+**G.3 `TPU` `HF_TOKEN`** The TorchTPU run. On a first session the restore exits 1 with `No cache archives`, which is fine. Pass the `--dtype` that Lab A settled on.
+
+```bash
+export PART3_BUCKET=your-bucket VLLM_XLA_CACHE_PATH=~/xla_cache_torchtpu
+bash 06_misreported_state_torchtpu/xla_cache.sh restore torchtpu
+make misreport-run BACKEND=torchtpu ARGS="--dtype auto" 2>&1 | tee results/06_run_torchtpu.log
+bash 06_misreported_state_torchtpu/xla_cache.sh push torchtpu
+```
+
+Expect: `Results written to results/06_verdicts_torchtpu.json`, then `Pushed gs://your-bucket/part3/torchtpu/xla_cache_` and a timestamp.
+
+**G.4 `TPU` `HF_TOKEN`** The JAX run, in the container. The digest is the image's, and the `--dtype` matches G.3, because parity refuses two runs whose dtype differs. Under the parity fallback, run the E4B commands from Lab A here in place of this block.
+
+```bash
+deactivate
+export VLLM_XLA_CACHE_PATH=~/xla_cache_jax
+bash 06_misreported_state_torchtpu/xla_cache.sh restore jax
+export JAX_DIGEST=$(sudo docker inspect --format '{{index .RepoDigests 0}}' vllm/vllm-tpu:gemma4)
+sudo docker run --rm --privileged --net=host --shm-size=16g \
+  -v "$PWD":/work -w /work -v "$VLLM_XLA_CACHE_PATH":/xla_cache \
+  -e TPU_CHIPS=4 -e HF_TOKEN="$HF_TOKEN" -e VLLM_XLA_CACHE_PATH=/xla_cache \
+  -e MODEL_REVISION="$MODEL_REVISION" -e CONTAINER_IMAGE_DIGEST="$JAX_DIGEST" \
+  --entrypoint bash vllm/vllm-tpu:gemma4 -c \
+  "pip install -q rich && python 06_misreported_state_torchtpu/run.py --backend jax --dtype auto \
+   --model RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic \
+   --input results/06_eval_corpus.jsonl --bands-report results/06_band_report_26b.json \
+   --eval-set --output results/06_verdicts_jax.json 2>&1 | tee results/06_run_jax.log"
+bash 06_misreported_state_torchtpu/xla_cache.sh push jax
+```
+
+Expect: `Results written to results/06_verdicts_jax.json`, then a `Pushed gs://your-bucket/part3/jax/` line.
+
+**G.5 `TPU` `human`** Copy the results back and delete the VM.
+
+```bash
+exit
+gcloud compute scp --recurse p3-eval:~/compliance-at-scale-tpu/results ./results/eval \
+  --project="$PROJECT_ID" --zone="$ZONE"
+gcloud compute instances delete p3-eval --project="$PROJECT_ID" --zone="$ZONE"
+cp results/eval/06_* results/
+ls results/06_*
+```
+
+Expect: `06_eval_corpus.jsonl`, `06_band_report_26b.json`, `06_verdicts_torchtpu.json`, `06_verdicts_jax.json` and the two run logs.
+
+**G.6 `laptop`** Score each backend against the labels and the rules.
+
+```bash
+python 05_trajectory_eval/rules_baseline.py --input results/06_eval_corpus.jsonl --output results/06_rules.json
+for b in jax torchtpu; do
+  python 05_trajectory_eval/score.py --judge results/06_verdicts_$b.json \
+    --baseline results/06_rules.json --labels results/06_eval_corpus.jsonl \
+    --json-out results/06_score_$b.json
+done
+ls results/06_score_*.json
+```
+
+Expect: `Verdicts written to results/06_rules.json`, then both score files in the listing. `score.py` writes `--json-out` only when the run recorded its provenance.
+
+**G.7 `laptop`** Compare and bridge.
+
+```bash
+make parity
+make bridge
+```
+
+Expect: `Parity report written to results/06_parity.json`, then `Wrote results/06_report.md` and `Wrote results/06_report.yaml`.
+
+**G.8 `human`** Publish the files, then fill the Results tables from them and from nothing else.
+
+```bash
+cp results/06_verdicts_*.json results/06_score_*.json results/06_parity.json results/06_rules.json \
+   results/06_band_report_26b.json results/06_report.md results/06_report.yaml \
+   06_misreported_state_torchtpu/published/
+git add 06_misreported_state_torchtpu/published/
+git commit -m "results(06): publish Part 3 run files"
+git push origin part3-module06
+```
+
+Expect: `git status --short` prints nothing, and every number in a Results table names a file in `published/` and a key in it.
 
 ## Lab A: smoke test on a v6e-4
 
@@ -470,5 +984,6 @@ Under the parity fallback, Tables 2, 5 and 6 cite `published/06_parity_e4b.json`
 - Whether the 26B-A4B FP8 checkpoint serves on a v6e-4 under either backend. Lab A answers it.
 - Whether the parity fallback is needed, and whether E4B loads under vllm-torchtpu on a v6e-4 if it is. Only the fallback's commands have been checked, as dry runs on a laptop.
 - Whether xgrammar structured outputs hold up on Gemma 4 under vllm-torchtpu. Its own tests cover them on a small Qwen model only. `run.py` counts parse errors and never repairs or retries, so a malformation rate becomes a finding.
+- The Lab G JAX container command in "Run it end to end" (the XLA cache mount, the digest read with `docker inspect`) and the `huggingface_hub` one-liner for `MODEL_REVISION`. They are written from the tools' documented behaviour and have not been run.
 - What to record as `CONTAINER_IMAGE_DIGEST` for the TorchTPU venv. 05's metadata assumes a container. Hashing `uv pip freeze` is a suggestion, not 05's rule.
 - The `bands.py --tokenizer` path for the 26B checkpoint needs a Hugging Face token. The tests and the Lab D plan diff use a whitespace tokenizer stand-in so they run anywhere.

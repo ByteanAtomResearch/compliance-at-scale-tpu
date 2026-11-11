@@ -35,6 +35,12 @@ later work too.
    (code.claude.com/docs/en/security, Cloud execution security). That is
    separate from a missing push grant.
 
+8. After the freeze commit lands on `main`, bring it into this branch with
+   `git merge main`, run from `part3-module06`. Never rebase this branch and
+   never force-push it. Run logs stamp commit SHAs (rule 6), and a rebase or a
+   force-push rewrites those SHAs, so a results file would point at a commit
+   that no longer exists on the branch.
+
 ## Files that belong to Part 2's freeze
 
 `results/band_report.json` and `05_trajectory_eval/FROZEN.md` belong to the

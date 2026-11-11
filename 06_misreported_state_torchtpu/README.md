@@ -32,7 +32,7 @@ Reader exercise: `diff <(sed -n '/^def run_band/,/^    return result/p' 05_traje
 
 ## Guardrails this module was built under
 
-The rules are in [AGENTS.md](../AGENTS.md) at the repo root (Claude Code reads it through `CLAUDE.md`; Codex and Antigravity read it directly). In short: 05 is never modified; work happens on `part3-module06`; no cloud resource is created without a yes; no `pip install -e .` in a TorchTPU environment; every step also exists as plain shell; every run log records the commit SHA; tags are cut from the maintainer's machine, because the cloud GitHub proxy rejects pushes of anything other than a branch, tags included ([code.claude.com/docs/en/security](https://code.claude.com/docs/en/security)).
+The rules are in [AGENTS.md](../AGENTS.md) at the repo root (Claude Code reads it through `CLAUDE.md`; Codex and Antigravity read it directly). In short: 05 is never modified; work happens on `part3-module06`; no cloud resource is created without a yes; no `pip install -e .` in a TorchTPU environment; every step also exists as plain shell; every run log records the commit SHA; `main` comes into this branch by `git merge main`, never by a rebase or a force-push; tags are cut from the maintainer's machine, because the cloud GitHub proxy rejects pushes of anything other than a branch, tags included ([code.claude.com/docs/en/security](https://code.claude.com/docs/en/security)).
 
 ## Setup on your machine
 
@@ -220,6 +220,16 @@ python 05_trajectory_eval/freeze.py --bands results/band_report.json --freeze-da
 grep -n "FROZEN\|Freeze date" 05_trajectory_eval/FROZEN.md | head
 ```
 
+Once the freeze commit is on `main`, bring it into this branch with a merge, and check that 05 still matches `main`:
+
+```bash
+git checkout part3-module06
+git merge main
+git diff --stat main -- 05_trajectory_eval 04_integration_demo
+```
+
+Never rebase `part3-module06` and never force-push it. Every run log stamps the commit SHA that produced it, and a rebase or a force-push rewrites those SHAs, so a results file would cite a commit the branch no longer has. A merge keeps every SHA already stamped and adds one merge commit.
+
 **Deliberate failure:** freeze against the smoke test's band report, writing to a scratch path so 05 stays clean:
 
 ```bash
@@ -230,7 +240,7 @@ head -5 /tmp/FROZEN_test.md
 
 It does not crash. It writes `PRE-FREEZE DRAFT`, because a band report built with `--staged` is marked staged and `freeze.py` will not treat it as frozen. A freeze over unreviewed records is not a freeze.
 
-**Checkpoint:** `sample_data/trajectories.jsonl` holds the adjudicated records, less any you rejected. 06's tamper corpus holds 8, less rejections. `FROZEN.md` shows `FROZEN` with the freeze date. On the 06 branch, `git diff --stat main -- 05_trajectory_eval` still prints nothing after rebasing on `main`.
+**Checkpoint:** `sample_data/trajectories.jsonl` holds the adjudicated records, less any you rejected. 06's tamper corpus holds 8, less rejections. `FROZEN.md` shows `FROZEN` with the freeze date. On the 06 branch, `git diff --stat main -- 05_trajectory_eval` still prints nothing after `git merge main`.
 
 **Exercise:** `freeze.py` hashes the schema, the prompt, the bands and the truncation strategy, and not the corpus. Explain why, and what that means if you adjudicate the remaining staged positives after publication.
 

@@ -22,7 +22,12 @@ reported separately per side so the two questions stay apart. Per side:
 parse errors, the sentinel (-1) count, the malformation report when a
 corpus is given, provenance, and the per-band wall times as information.
 With --labels, precision and recall per tier and state on each side and
-the delta between them, plus authorization_bypass recall by variant.
+the delta between them, plus authorization_bypass recall by variant. Every
+labelled table and the labels block of the report say whose labels were
+used, in labels.py's words. A rate is given only where there is enough
+under it: a tier of fewer than ten records, or a state with fewer than five
+labelled positives, is reported as counts. Eight records cannot carry a
+rate, and neither can two positives.
 
 Bit-identical verdicts are not expected across backends, which is why
 kappa is the headline and exact match is not. Running parity on two runs
@@ -48,6 +53,7 @@ from rich.table import Table
 _score = lab05.load("score")
 _corpus = lab05.load("corpus")
 _schema = lab05.load("schema")
+_labels = lab05.sibling("labels")
 
 console = Console()
 
@@ -100,12 +106,18 @@ INFORMATIONAL: tuple[str, ...] = (
     "evaluator",
     "runner",
     "xla_cache_path_env",
+    "label_sources",
 )
 SMALL_SAMPLE_N = 10
 SPARSE_POSITIVES = 5
 KAPPA_UNDEFINED_NOTE = "undefined: both runs unanimous for this state, so expected agreement is 1; read the counts"
 SMALL_SAMPLE_NOTE = f"fewer than {SMALL_SAMPLE_N} decisions: read the counts, not kappa"
 SPARSE_NOTE = f"a side has fewer than {SPARSE_POSITIVES} positives or negatives: kappa swings on one record"
+COUNTS_ONLY_NOTE = (
+    f"counts only, no rates: a tier needs {SMALL_SAMPLE_N} records and a state {SPARSE_POSITIVES} labelled "
+    "positives before a rate means anything"
+)
+STAGED_SOURCE_SUFFIX = " (--allow-staged)"
 NOT_COMPARED_ONE_SIDE = "recorded on one side only; not compared"
 NOT_COMPARED_ABSENT = "absent on both sides; not compared"
 
@@ -278,30 +290,45 @@ def side_summary(doc: dict[str, Any], records: list | None) -> dict[str, Any]:
 # ── Labelled comparison ───────────────────────────────────────────────────────
 
 
-def load_label_records(path: str | Path, allow_staged: bool, verdict_ids: set[str]) -> tuple[list, list[str]]:
-    """The adjudicated corpus, cut down to the records both runs judged.
+def load_label_records(
+    path: str | Path, allow_staged: bool, verdict_ids: set[str]
+) -> tuple[list, list[str], list[str], dict[str, Any]]:
+    """The labelled records both runs judged, who labelled them, and what was left out.
 
-    --allow-staged mirrors score.py: proposed labels stand in for decisions,
-    for synthetic verification only. Any verdict id without a record is a
-    refusal, and records without a verdict are excluded and listed, so
+    Without --allow-staged the file must be a scored corpus, adjudicated
+    throughout. With it the file may mix kinds: a record someone adjudicated
+    is scored against that decision, clean included; a record nobody decided
+    is scored against its proposal; a record rejected at adjudication has no
+    ground truth and is left out and listed. Any verdict id without a record
+    is a refusal, and records without a verdict are excluded and listed, so
     score.evaluate never sees a silent negative.
+
+    Returns the scored records, the ids with no verdict, the ids with no
+    label, and labels.py's summary of where the scored labels came from.
     """
     try:
         records = _corpus.load_records(path, require_adjudicated=not allow_staged)
     except _corpus.CorpusIntegrityError as exc:
-        raise SystemExit(f"{exc}\nPass --allow-staged to score proposed labels (synthetic verification only).") from exc
+        raise SystemExit(f"{exc}\nPass --allow-staged to score a file that is not adjudicated throughout.") from exc
     if not records:
         raise SystemExit(f"no records loaded from {path}")
-    if allow_staged:
-        for record in records:
-            record.labels = record.labels or record.proposed_labels
     by_id = {record.id: record for record in records}
     missing = sorted(verdict_ids - set(by_id))
     if missing:
         raise SystemExit(f"{len(missing)} verdict ids have no record in {path}: {missing[:20]}")
-    kept = [record for record in records if record.id in verdict_ids]
+    judged = [record for record in records if record.id in verdict_ids]
     excluded = sorted(set(by_id) - verdict_ids)
-    return kept, excluded
+    sources = _labels.summarize(judged, staged=allow_staged)
+    kept: list = []
+    no_label: list[str] = []
+    for record in judged:
+        usable = _labels.scoring_labels(record)
+        if usable is None:
+            no_label.append(record.id)
+            continue
+        record.labels = usable
+        kept.append(record)
+    return kept, excluded, sorted(no_label), sources
 
 
 _HEADLINE_FIELDS = (
@@ -326,39 +353,79 @@ def _delta(left: float | None, right: float | None) -> float | None:
     return None if left is None or right is None else right - left
 
 
+_RATE_FIELDS = ("recall", "recall_wilson", "precision", "precision_wilson")
+
+
+def _counts_only(headline: dict[str, Any]) -> dict[str, Any]:
+    """The same headline with every rate blanked, where there is too little under it to carry one."""
+    return {field: (None if field in _RATE_FIELDS else value) for field, value in headline.items()}
+
+
 def labelled_comparison(records: list, left_verdicts: dict[str, Any], right_verdicts: dict[str, Any]) -> dict[str, Any]:
-    """score.evaluate per tier and side, then right minus left. Tiers are split first, as score.main does."""
+    """score.evaluate per tier and side, then right minus left. Tiers are split first, as score.main does.
+
+    A state keeps its counts and loses its rates when its tier has fewer
+    than SMALL_SAMPLE_N scored records or it has fewer than SPARSE_POSITIVES
+    labelled positives. The rates go from the file as well as the screen,
+    so nobody can lift a recall on two positives out of the JSON.
+    """
     tiers: dict[str, dict[str, Any]] = {}
+    tier_notes: dict[str, dict[str, Any]] = {}
     for tier in _schema.TIERS:
         tier_records = [record for record in records if record.tier == tier]
         if not tier_records:
             continue
+        small_tier = len(tier_records) < SMALL_SAMPLE_N
         left_eval = _score.evaluate(tier_records, left_verdicts, "judge")
         right_eval = _score.evaluate(tier_records, right_verdicts, "judge")
         per_state: dict[str, Any] = {}
         for state in _schema.VIOLATION_STATES:
             left, right = _headline(left_eval[state]), _headline(right_eval[state])
+            counts_only = small_tier or left["positives"] < SPARSE_POSITIVES
+            if counts_only:
+                left, right = _counts_only(left), _counts_only(right)
             per_state[state] = {
                 "left": left,
                 "right": right,
                 "delta": {metric: _delta(left[metric], right[metric]) for metric in ("recall", "precision")},
+                "counts_only": counts_only,
                 "malformed_pairs": {
                     "left": left_eval[state]["malformed_pairs"],
                     "right": right_eval[state]["malformed_pairs"],
                 },
                 "reduced_region": {
-                    "left": left_eval[state]["reduced_region"],
-                    "right": right_eval[state]["reduced_region"],
+                    "left": _reduced(left_eval[state]["reduced_region"], counts_only),
+                    "right": _reduced(right_eval[state]["reduced_region"], counts_only),
                 },
             }
         tiers[tier] = per_state
+        any_counts_only = any(entry["counts_only"] for entry in per_state.values())
+        tier_notes[tier] = {
+            "records": len(tier_records),
+            "counts_only": any_counts_only,
+            "note": COUNTS_ONLY_NOTE if any_counts_only else None,
+        }
     return {
         "tiers": tiers,
+        "tier_notes": tier_notes,
         "variant_recall": {
-            "left": _score.variant_recall(records, left_verdicts),
-            "right": _score.variant_recall(records, right_verdicts),
+            "left": _variant_recall(records, left_verdicts),
+            "right": _variant_recall(records, right_verdicts),
         },
     }
+
+
+def _reduced(region: dict[str, Any], counts_only: bool) -> dict[str, Any]:
+    return {**region, "recall": None} if counts_only else region
+
+
+def _variant_recall(records: list, verdicts: dict[str, Any]) -> dict[str, Any]:
+    """05's bypass recall by variant, with the rate blanked wherever a variant has under five positives."""
+    out: dict[str, Any] = {}
+    for variant, entry in _score.variant_recall(records, verdicts).items():
+        counts_only = entry["positives"] < SPARSE_POSITIVES
+        out[variant] = {**entry, "recall": None, "wilson": None, "counts_only": True} if counts_only else entry
+    return out
 
 
 # ── Reporting ─────────────────────────────────────────────────────────────────
@@ -402,7 +469,12 @@ def print_report(result: dict[str, Any]) -> None:
     labels = result["labels"]
     if labels:
         for tier, per_state in labels["tiers"].items():
-            table = Table(title=f"Judge vs labels, tier {tier} ({labels['source']})")
+            whose = _labels.tier_labels(labels["sources"], tier)
+            if labels["tier_notes"][tier]["counts_only"]:
+                console.print(_counts_table(tier, whose, per_state, left_name, right_name))
+                console.print(f"  [dim]{COUNTS_ONLY_NOTE}[/dim]", highlight=False)
+                continue
+            table = Table(title=f"Judge vs labels, tier {tier}. Labels: {whose}")
             for column in (
                 "State",
                 f"recall {left_name}",
@@ -427,6 +499,37 @@ def print_report(result: dict[str, Any]) -> None:
         excluded = len(labels["excluded_unverdicted_ids"])
         if excluded:
             console.print(f"  [yellow]{excluded} labelled records had no verdict and were excluded[/yellow]")
+        no_label = labels["excluded_no_label_ids"]
+        if no_label:
+            console.print(
+                f"  [yellow]{len(no_label)} records were rejected at adjudication, no label: {no_label}[/yellow]",
+                highlight=False,
+            )
+
+
+def _counts_table(tier: str, whose: str, per_state: dict[str, Any], left_name: str, right_name: str) -> Table:
+    """A small tier, as counts: labelled positives, then hits and false alarms per side. No rates."""
+    table = Table(title=f"Judge vs labels, tier {tier}, counts only. Labels: {whose}")
+    for column in (
+        "State",
+        "labelled",
+        f"found {left_name}",
+        f"found {right_name}",
+        f"false alarms {left_name}",
+        f"false alarms {right_name}",
+    ):
+        table.add_column(column)
+    for state, entry in per_state.items():
+        left, right = entry["left"], entry["right"]
+        table.add_row(
+            state,
+            str(left["positives"]),
+            f"{left['tp']} of {left['positives']}",
+            f"{right['tp']} of {right['positives']}",
+            str(left["fp"]),
+            str(right["fp"]),
+        )
+    return table
 
 
 # ── Entry ─────────────────────────────────────────────────────────────────────
@@ -451,13 +554,13 @@ def compare(args: argparse.Namespace) -> dict[str, Any]:
     records: list | None = None
     labels: dict[str, Any] | None = None
     if args.labels:
-        records, excluded = load_label_records(args.labels, args.allow_staged, set(left_verdicts))
+        records, excluded, no_label, sources = load_label_records(args.labels, args.allow_staged, set(left_verdicts))
         labels = {
             "path": str(args.labels),
-            "source": "proposed labels (--allow-staged; synthetic verification only)"
-            if args.allow_staged
-            else "adjudicated",
+            "source": sources["statement"] + STAGED_SOURCE_SUFFIX if args.allow_staged else _labels.LABELS_CORPUS,
+            "sources": sources,
             "excluded_unverdicted_ids": excluded,
+            "excluded_no_label_ids": no_label,
             **labelled_comparison(records, left_verdicts, right_verdicts),
         }
 
@@ -495,9 +598,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--right", required=True, help="Verdict file from the other backend")
     parser.add_argument("--left-name", default=None, help="Label for the left run; defaults to its recorded backend")
     parser.add_argument("--right-name", default=None, help="Label for the right run; defaults to its recorded backend")
-    parser.add_argument("--labels", default=None, help="Adjudicated corpus for precision and recall per side")
+    parser.add_argument("--labels", default=None, help="Labelled records for precision and recall per side")
     parser.add_argument(
-        "--allow-staged", action="store_true", help="Score proposed labels (synthetic verification only)"
+        "--allow-staged",
+        action="store_true",
+        help="Accept a labels file that is not adjudicated throughout; the report says whose labels each tier used",
     )
     parser.add_argument("--output", default=None, help="Where to write the parity JSON; nothing is written on refusal")
     return parser

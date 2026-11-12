@@ -20,7 +20,10 @@ by field. If that test fails, parity is off.
 
 Every run log also records the commit that ran (sha, branch, dirty flag), a
 hash of the band report, and the vllm distribution found, so a number can be
-traced back to the exact code and inputs that produced it.
+traced back to the exact code and inputs that produced it. It records where
+the judged records' labels came from too (labels.py). The judge never reads
+a label, so that block changes no verdict; it is there so whoever scores the
+run knows whose labels they are scoring against.
 
 Usage mirrors 05's runner plus --backend and --dtype:
     python 06_misreported_state_torchtpu/run.py --backend torchtpu \
@@ -46,6 +49,7 @@ from rich.console import Console
 _runner = lab05.load("batch_trajectory_eval")
 _corpus = lab05.load("corpus")
 _schema = lab05.load("schema")
+_labels = lab05.sibling("labels")
 
 console = Console()
 
@@ -165,10 +169,15 @@ def git_provenance(repo_root: Path) -> dict[str, Any]:
 
 
 def extra_metadata(
-    args: argparse.Namespace, tensor_parallel_size: int, vllm_distribution: dict[str, str], band_report_sha256: str
+    args: argparse.Namespace,
+    tensor_parallel_size: int,
+    vllm_distribution: dict[str, str],
+    band_report_sha256: str,
+    label_sources: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """What 06 adds to 05's build_run_metadata. sampling_params is replaced with SAMPLING itself."""
     return {
+        "label_sources": label_sources,
         "backend": args.backend,
         "dtype": args.dtype,
         "checkpoint": args.model,
@@ -275,10 +284,16 @@ def main(args: argparse.Namespace) -> None:
         else ("compile_only" if args.compile_only else ("eval_set" if args.eval_set else "benchmark"))
     )
     tensor_parallel_size = resolve_tensor_parallel_size(probe_jax=not args.dry_run)
+    label_sources = _labels.summarize(records, staged=args.staged)
     metadata = {
         **_runner.build_run_metadata(args, ceilings, max_model_len, mode),
-        **extra_metadata(args, tensor_parallel_size, vllm_distribution, file_sha256(args.bands_report)),
+        **extra_metadata(args, tensor_parallel_size, vllm_distribution, file_sha256(args.bands_report), label_sources),
     }
+    console.print(
+        f"Labels on these records: {label_sources['statement']}. The judge reads none of them.",
+        highlight=False,
+        soft_wrap=True,
+    )
 
     plan = []
     for ceiling in ceilings:

@@ -34,20 +34,23 @@ Everything else is 05's. 06 imports 05's schema, corpus loader, prompts, band se
 
 | File | What it does |
 | --- | --- |
-| `lab05.py` | Loads 05 modules by path in dependency order and registers them under their bare names, so `from schema import ...` inside 05 resolves and dataclass identity stays single. The only way 06 reaches 05. |
-| `run.py` | 05's runner with `--backend {jax,torchtpu}` and `--dtype {bfloat16,auto}`. The backend is recorded and checked, never switched. Carries a copy of 05's generate loop with dtype as a parameter. |
-| `parity.py` | Compares two verdict files state by state: agreement, Cohen's kappa, precision and recall deltas with `--labels`. Refuses to compare runs that differ in anything but the backend. |
+| `lab05.py` | Loads 05 modules by path in dependency order and registers them under their bare names, so `from schema import ...` inside 05 resolves and dataclass identity stays single. The only way 06 reaches 05. Its `sibling()` loads 06's own shared code the same way. |
+| `labels.py` | The words for where a record's labels came from: `student-adjudicated`, `template-construction labels, not adjudicated`, and three more. Every table and metadata block that names labels gets its wording here. |
+| `student_set.py` | `make misreport-student-set`: builds the 22-record student eval set from staged files, the eight tamper records with your adjudication folded in plus the 14-record sample. Refuses records you have not decided. |
+| `run.py` | 05's runner with `--backend {jax,torchtpu}` and `--dtype {bfloat16,auto}`. The backend is recorded and checked, never switched. Carries a copy of 05's generate loop with dtype as a parameter. Records the judged records' label sources in the run log. |
+| `compare_readers.py` | Rules, judge and labels side by side, one row per record, one table per tier. Counts only, no rates. Refuses when the three did not read the same records. |
+| `parity.py` | Compares two verdict files state by state: agreement, Cohen's kappa, precision and recall deltas with `--labels`. Refuses to compare runs that differ in anything but the backend. Gives counts in place of rates for a tier under ten records or a state under five labelled positives. |
 | `bridge.py` | Turns a verdict file into the Markdown and YAML shapes Module 04 feeds to rai-checklist-cli, for the six states, with operator policy in its own block. |
-| `build_review_files.py` | Cuts the 60-record review file and the 14-record policy_withheld top-up from `sample_data/staging/candidates_tier2_batch1.jsonl` by id. `--check` proves the committed files match. |
+| `build_review_files.py` | Cuts three files from `sample_data/staging/candidates_tier2_batch1.jsonl` by id: the 60-record review file, the 14-record policy_withheld top-up, and the 14-record student sample. `--check` proves the committed files match. |
 | `rehearsal.py` | `make misreport-rehearsal`: runs every laptop-only step of Labs B, D, E and F, with fixture verdicts standing in for judge runs, and exits 1 on any mismatch. |
 | `xla_cache.sh` | XLA cache push and restore under a per-backend GCS prefix. 05's `cache_helper.sh` hardcodes `part2`. |
-| `data/staging/` | The 8 tamper drafts, the 60 review records, the 14 top-up records. Unreviewed, like `sample_data/staging/`. |
+| `data/staging/` | The 8 tamper drafts, the 60 review records, the 14 top-up records, the 14-record student sample. Unreviewed, like `sample_data/staging/`. |
 | `data/tamper_corpus.jsonl`, `data/tamper_rejections.jsonl` | Created by `adjudicate.py --corpus --rejections` during review. Not committed until then. |
 | `published/` | Committed home for the Part 3 result files after the TPU runs. `results/` is gitignored at every depth, so a number in the post has to point at a file here. |
 
-`parity.py` and `bridge.py` exit 2 when they refuse their inputs (a guard or a validation failure) and 1 on any other error, so a script can tell a refusal from a crash.
+`parity.py`, `bridge.py`, `student_set.py` and `compare_readers.py` exit 2 when they refuse their inputs (a guard or a validation failure) and 1 on any other error, so a script can tell a refusal from a crash.
 
-Tests live beside 05's in `tests/`: `test_misreport_data.py`, `test_misreport_runner.py`, `test_misreport_parity.py`, `test_misreport_bridge.py`. `test_misreport_rehearsal.py` covers the rehearsal. `make test` runs 278 tests on this branch, 181 of them 05's, with no TPU and no vllm.
+Tests live beside 05's in `tests/`: `test_misreport_data.py`, `test_misreport_runner.py`, `test_misreport_parity.py`, `test_misreport_bridge.py`. `test_misreport_student_set.py` covers the student eval set and the label-source wording, and `test_misreport_rehearsal.py` covers the rehearsal. `make test` runs 323 tests on this branch, with no TPU and no vllm.
 
 ## What `--backend` may and may not do
 
@@ -71,7 +74,7 @@ make test
 git diff --stat main -- 05_trajectory_eval 04_integration_demo
 ```
 
-Checkpoint: the test run ends in `OK` with 278 tests, and the diff prints nothing.
+Checkpoint: the test run ends in `OK` with 323 tests, and the diff prints nothing.
 
 Every lab below has the same five parts: an objective, a prediction you write down before running, one deliberate failure, a checkpoint you do not move past, and an exercise answered against 05's own code or results.
 
@@ -91,7 +94,7 @@ make test
 make misreport-rehearsal
 ```
 
-Observed: `Ran 278 tests` then `OK`, then `Rehearsal passed: 6 of 6 steps, no TPU, no judge.`
+Observed: `Ran 323 tests` then `OK`, then `Rehearsal passed: 6 of 6 steps, no TPU, no judge.`
 
 **R.1 `laptop`** Dry-run the eight tamper records, using the stand-in band report R.0 wrote. No vllm is imported.
 
@@ -186,7 +189,7 @@ make test
 git diff --stat main -- 05_trajectory_eval 04_integration_demo
 ```
 
-Observed: `Ran 278 tests` then `OK`; the diff prints nothing.
+Observed: `Ran 323 tests` then `OK`; the diff prints nothing.
 
 **0.2 `laptop`** Rehearse every laptop-only step of Labs B, D, E and F in one command. It exits 1 on any mismatch.
 
@@ -326,7 +329,7 @@ python 06_misreported_state_torchtpu/build_review_files.py --check
 wc -l 06_misreported_state_torchtpu/data/staging/*.jsonl
 ```
 
-Observed: `Review files match a rebuild from` the staged batch's path, then line counts of 8, 60 and 14, `82 total`.
+Observed: `Review files match a rebuild from` the staged batch's path, then line counts of 8, 60, 14 and 14, `96 total`.
 
 **B.2 `laptop`** Load the tamper drafts with 05's loader.
 
@@ -458,7 +461,7 @@ Expect: `PRE-FREEZE DRAFT` in the status line. Needs the Lab A files.
 make test
 ```
 
-Observed: `Ran 278 tests` then `OK`.
+Observed: `Ran 323 tests` then `OK`.
 
 **D.2 `laptop`** Dry-run 06's runner and compare its plan with 05's. This uses the stand-in band report and 05 plan that step 0.2 wrote.
 

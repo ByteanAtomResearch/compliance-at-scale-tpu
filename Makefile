@@ -9,7 +9,8 @@ PORT        ?= 8000
 CONCURRENCY ?= 10
 
 .PHONY: help setup verify batch serve client client-concurrent demo trajectory score bands \
-	misreport-review-files misreport-rehearsal misreport-corpus misreport-bands misreport-run parity bridge \
+	misreport-review-files misreport-student-set misreport-rehearsal \
+	misreport-corpus misreport-bands misreport-run parity bridge \
 	test clean
 
 help: ## Show this help
@@ -70,10 +71,18 @@ bands: ## Emit corpus token distribution + band proposal (no TPU)
 # ── Module 6: Misreported State on TorchTPU (Part 3) ───────
 MISREPORT_MODEL ?= RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic
 MISREPORT_DIR   ?= 06_misreported_state_torchtpu
+STUDENT_DIR     ?= results/student
 BACKEND         ?=
 
-misreport-review-files: ## Rebuild 06's staged review files from the tier-2 batch (no TPU)
+misreport-review-files: ## Rebuild 06's staged review files and the student sample from the tier-2 batch (no TPU)
 	python $(MISREPORT_DIR)/build_review_files.py
+
+misreport-student-set: ## Build the student eval set: the eight you adjudicated + the 14-record sample (no TPU)
+	python $(MISREPORT_DIR)/student_set.py \
+		--decisions $(STUDENT_DIR)/tamper_labels.jsonl \
+		--rejections $(STUDENT_DIR)/tamper_rejections.jsonl \
+		--output $(STUDENT_DIR)/eval_set.jsonl \
+		$(ARGS)
 
 misreport-rehearsal: ## Rehearse every laptop-only 06 step on fixtures; fails on any mismatch (no TPU)
 	python $(MISREPORT_DIR)/rehearsal.py

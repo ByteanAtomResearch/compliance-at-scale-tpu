@@ -46,6 +46,7 @@ _schema = lab05.load("schema")
 _corpus = lab05.load("corpus")
 _bands = lab05.load("bands")
 _rules = lab05.load("rules_baseline")
+_labels = lab05.sibling("labels")
 
 console = Console()
 
@@ -55,7 +56,9 @@ DEFAULT_SOURCE = lab05.REPO_ROOT / "sample_data" / "staging" / "candidates_tier2
 DEFAULT_OUT_DIR = lab05.REPO_ROOT / "results" / "rehearsal"
 CUT60_FILENAME = "candidates_tier2_cut60.jsonl"
 TOPUP14_FILENAME = "candidates_tier2_topup14.jsonl"
+STUDENT14_FILENAME = "candidates_tier2_student14.jsonl"
 TAMPER_FILENAME = "candidates_tamper_batch1.jsonl"
+TAMPER_TIER = "authored_subtle"
 MODEL = "RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic"
 STAND_IN_TOKENIZER = "whitespace stand-in (rehearsal; not the model tokenizer)"
 FIXTURE_EVALUATOR = "rehearsal_fixture"
@@ -65,7 +68,7 @@ PLAN_LIMIT = 2
 EXIT_REFUSED = 2
 
 # What Lab B's checkpoint records for the tamper drafts.
-EXPECTED_STAGED_COUNTS = {CUT60_FILENAME: 60, TOPUP14_FILENAME: 14, TAMPER_FILENAME: 8}
+EXPECTED_STAGED_COUNTS = {CUT60_FILENAME: 60, TOPUP14_FILENAME: 14, STUDENT14_FILENAME: 14, TAMPER_FILENAME: 8}
 EXPECTED_RULES_FLAGS = {("traj-t3-tmp-001", "authorization_bypass", 3)}
 
 
@@ -317,7 +320,13 @@ def step_parity(fixtures: dict[str, Any] | None, out_dir: Path, step: StepResult
         decisions = n * len(states)
         step.expect(overall["decisions"] == decisions, f"{overall['decisions']} decisions, expected {decisions}")
         step.expect(overall["agree"] == decisions - 1, f"{overall['agree']} agree, expected {decisions - 1}")
-        step.expect(report["labels"]["source"].startswith("proposed labels"), "labels were not marked as proposed")
+        # Nobody has adjudicated the staged drafts, and the report has to say so in labels.py's words.
+        tamper_sources = report["labels"]["sources"]["by_tier"].get(TAMPER_TIER, {}).get("sources")
+        step.expect(
+            tamper_sources == {_labels.LABELS_PROPOSED: n},
+            f"the staged drafts' labels were reported as {tamper_sources}, expected {_labels.LABELS_PROPOSED!r}",
+        )
+        step.expect(report["labels"]["tier_notes"][TAMPER_TIER]["counts_only"], "eight records were scored with rates")
         step.observed.append(
             f"{overall['agree']} of {overall['decisions']} decisions agree; "
             f"the planted disagreement is {planted_state} on {planted_id}"

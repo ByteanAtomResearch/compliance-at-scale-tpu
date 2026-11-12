@@ -20,6 +20,11 @@ and would leak into every other module in the process.
 Test contract. The 06 scripts do `import lab05` as a sibling import, which
 resolves when they run as scripts. A test that loads a 06 script by path must
 first load this file by path and register it as sys.modules["lab05"].
+
+06's own shared code. sibling() loads another 06 script by path the same
+way, once per process, so run.py, parity.py and bridge.py can share one
+module (labels.py) without a second sibling import that every test would
+have to register by hand.
 """
 
 from __future__ import annotations
@@ -31,6 +36,8 @@ from types import ModuleType
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LAB05_DIR = REPO_ROOT / "05_trajectory_eval"
+LAB06_DIR = Path(__file__).resolve().parent
+SIBLING_PREFIX = "lab06_"
 
 # Each module's bare sibling imports, verified against the import lines on
 # main at ced0c80. A name missing here is a KeyError on purpose.
@@ -80,5 +87,31 @@ def load(name: str) -> ModuleType:
     except BaseException:
         # Never leave a half-initialised module registered under 05's name.
         sys.modules.pop(name, None)
+        raise
+    return module
+
+
+def sibling(name: str) -> ModuleType:
+    """Return module 06's own script `name`, executing it at most once per process.
+
+    Registered as lab06_<name>, so it can never shadow a 05 module or an
+    installed package. A missing file is an ImportError naming the path.
+    """
+    module_name = f"{SIBLING_PREFIX}{name}"
+    existing = sys.modules.get(module_name)
+    if existing is not None:
+        return existing
+    path = LAB06_DIR / f"{name}.py"
+    if not path.exists():
+        raise ImportError(f"module 06 has no script {path}")
+    spec = importlib.util.spec_from_file_location(module_name, str(path))
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot build an import spec for {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        sys.modules.pop(module_name, None)
         raise
     return module

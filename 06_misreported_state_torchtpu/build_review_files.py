@@ -1,5 +1,5 @@
 """
-Module 6: Build the Part 3 review files from the staged tier-2 batch.
+Module 6: Build the Part 3 review files and the student sample from the staged tier-2 batch.
 
 The human review for Part 3 covers 60 tier-2 positives (10 per state, 7 in
 full fidelity and 3 in the reduced region) plus 14 authorization_bypass
@@ -8,9 +8,16 @@ pending record in the file it is given, so these records get their own
 staged files inside 06. sample_data/staging/ is never modified and 05 stays
 frozen.
 
+The student track gets a third file cut the same way: a 14-record sample,
+two proposed positives per state and two clean records. Nobody adjudicates
+it. It rides beside the eight tamper records in the student eval set
+(student_set.py) so the six states all have something to agree or disagree
+on, and its labels are described everywhere as template-construction labels,
+not adjudicated.
+
 The id lists live here as literals, not as a seeded draw, so the cut is a
 reviewable artifact: anyone can see which records were chosen and rebuild
-the two files byte for byte. Lines are copied from the source unchanged and
+the three files byte for byte. Lines are copied from the source unchanged and
 in source order. --check rebuilds in memory and compares against the
 committed files without writing anything.
 
@@ -35,6 +42,7 @@ DEFAULT_OUT_DIR = Path(__file__).resolve().parent / "data" / "staging"
 
 CUT60_FILENAME = "candidates_tier2_cut60.jsonl"
 TOPUP14_FILENAME = "candidates_tier2_topup14.jsonl"
+STUDENT14_FILENAME = "candidates_tier2_student14.jsonl"
 
 # Seeded draw (seed 20260812, adjudicate.py's default) recorded by hand in the
 # module 06 spec: 7 full-fidelity and 3 reduced-region records per state.
@@ -64,6 +72,27 @@ TOPUP14_IDS: tuple[str, ...] = tuple(
     f"traj-t2-ab-{pair}-{variant}" for pair in TOPUP14_PAIRS for variant in ("pv", "pw")
 )
 
+# The student sample: two proposed positives per state and two clean records,
+# none of them in the 60 or the 14 above. Chosen by hand, not drawn: every
+# record keeps full fidelity (no truncation) and has at most 9 steps, so its
+# judge prompt is about as long as a tamper record's and the 22-record student
+# set stays in as few length bands as it can. The authorization_bypass pair is
+# one trajectory in its policy_visible and policy_withheld forms. Both clean
+# records are the plain shape; the hard negatives the student track judges are
+# the three in the tamper set.
+STUDENT14_IDS: tuple[str, ...] = tuple(
+    f"traj-t2-{short}"
+    for short in (
+        "sv-009 sv-017 "  # scope_violation
+        "sg-047 sg-051 "  # specification_gaming
+        "sse-077 sse-081 "  # sensitive_state_exposure
+        "uc-115 uc-127 "  # unsafe_continuation
+        "mr-153 mr-157 "  # misreported_state
+        "ab-207-pv ab-207-pw "  # authorization_bypass, one policy pair
+        "cln-229 cln-245"  # clean
+    ).split()
+)
+
 if len(CUT60_IDS) != 60 or len(set(CUT60_IDS)) != 60:
     raise ValueError(f"CUT60_IDS must hold 60 distinct ids, has {len(set(CUT60_IDS))}")
 if len(TOPUP14_IDS) != 14 or len(set(TOPUP14_IDS)) != 14:
@@ -71,7 +100,16 @@ if len(TOPUP14_IDS) != 14 or len(set(TOPUP14_IDS)) != 14:
 if set(CUT60_IDS) & set(TOPUP14_IDS):
     raise ValueError(f"CUT60_IDS and TOPUP14_IDS overlap: {sorted(set(CUT60_IDS) & set(TOPUP14_IDS))}")
 
-REVIEW_FILES: dict[str, tuple[str, ...]] = {CUT60_FILENAME: CUT60_IDS, TOPUP14_FILENAME: TOPUP14_IDS}
+if len(STUDENT14_IDS) != 14 or len(set(STUDENT14_IDS)) != 14:
+    raise ValueError(f"STUDENT14_IDS must hold 14 distinct ids, has {len(set(STUDENT14_IDS))}")
+if set(STUDENT14_IDS) & (set(CUT60_IDS) | set(TOPUP14_IDS)):
+    raise ValueError("STUDENT14_IDS overlaps the review files; the student sample is cut from what is left")
+
+REVIEW_FILES: dict[str, tuple[str, ...]] = {
+    CUT60_FILENAME: CUT60_IDS,
+    TOPUP14_FILENAME: TOPUP14_IDS,
+    STUDENT14_FILENAME: STUDENT14_IDS,
+}
 
 
 def select_lines(source: str | Path, ids: tuple[str, ...]) -> list[str]:

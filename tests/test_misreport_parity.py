@@ -369,7 +369,8 @@ class TestAgreement(unittest.TestCase):
 
 class TestLabels(unittest.TestCase):
     def setUp(self):
-        self.records = _adjudicated_corpus(per_state=3, clean=6, seed=13)
+        # Eight per state leaves at least five full-fidelity positives in every state, enough to carry a rate.
+        self.records = _adjudicated_corpus(per_state=8, clean=6, seed=13)
         self.verdicts = _perfect_judge(self.records)
         self.corpus_path = _write_jsonl(self.records, _tmp("trajectories.jsonl"))
 
@@ -389,12 +390,34 @@ class TestLabels(unittest.TestCase):
         per_state = tiers["authored_clean"]
         self.assertLess(per_state[label.state]["delta"]["recall"], 0.0)
         for state, entry in per_state.items():
-            self.assertEqual(set(entry), {"left", "right", "delta", "malformed_pairs", "reduced_region"})
+            self.assertEqual(set(entry), {"left", "right", "delta", "counts_only", "malformed_pairs", "reduced_region"})
             if state != label.state:
                 self.assertEqual(entry["delta"]["recall"], 0.0 if entry["left"]["recall"] is not None else None, state)
         self.assertEqual(result["labels"]["source"], "adjudicated")
         self.assertEqual(result["labels"]["excluded_unverdicted_ids"], [])
         self.assertIn("policy_withheld", result["labels"]["variant_recall"]["left"])
+        self.assertEqual(result["labels"]["tier_notes"]["authored_clean"]["counts_only"], False)
+        self.assertEqual(result["labels"]["excluded_no_label_ids"], [])
+
+    def test_a_state_with_under_five_positives_is_counts_only(self):
+        records = _adjudicated_corpus(per_state=3, clean=6, seed=13)
+        verdicts = _perfect_judge(records)
+        corpus_path = _write_jsonl(records, _tmp("small.jsonl"))
+        left = _write_run("left.json", verdicts, _meta())
+        right = _write_run("right.json", verdicts, _meta(backend="torchtpu"))
+        labels = _compare(left, right, labels=str(corpus_path))["labels"]
+        note = labels["tier_notes"]["authored_clean"]
+        self.assertTrue(note["counts_only"])
+        self.assertEqual(note["note"], _parity.COUNTS_ONLY_NOTE)
+        sparse = [state for state, entry in labels["tiers"]["authored_clean"].items() if entry["counts_only"]]
+        self.assertTrue(sparse)
+        for state in sparse:
+            entry = labels["tiers"]["authored_clean"][state]
+            self.assertLess(entry["left"]["positives"], _parity.SPARSE_POSITIVES)
+            self.assertIsNone(entry["left"]["recall"])
+            self.assertIsNone(entry["right"]["precision_wilson"])
+            self.assertEqual(entry["delta"], {"recall": None, "precision": None})
+            self.assertEqual(entry["left"]["tp"], entry["left"]["positives"])
 
     def test_allow_staged_uses_proposed_labels(self):
         staged_path = _write_jsonl(self.records, _tmp("staged.jsonl"), staged=True)
@@ -405,8 +428,20 @@ class TestLabels(unittest.TestCase):
         self.assertNotEqual(ctx.exception.code, 2)  # a labels error, not a parity refusal
         self.assertIn("--allow-staged", str(ctx.exception))
         result = _compare(left, right, labels=str(staged_path), allow_staged=True)
-        self.assertIn("proposed", result["labels"]["source"])
+        # 05's generator built these records from templates and nobody reviewed them.
+        self.assertEqual(
+            result["labels"]["source"],
+            f"tier authored_clean, {len(self.records)} records: "
+            "template-construction labels, not adjudicated (--allow-staged)",
+        )
+        self.assertEqual(
+            result["labels"]["sources"]["by_tier"]["authored_clean"]["sources"],
+            {"template-construction labels, not adjudicated": len(self.records)},
+        )
         self.assertIn("authored_clean", result["labels"]["tiers"])
+        # The proposals were scored: a perfect judge on proposed labels has full recall.
+        recalls = {entry["left"]["recall"] for entry in result["labels"]["tiers"]["authored_clean"].values()}
+        self.assertEqual(recalls, {1.0})
 
     def test_verdict_id_without_label_record_refuses(self):
         verdicts = dict(self.verdicts)

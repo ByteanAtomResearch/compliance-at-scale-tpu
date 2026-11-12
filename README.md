@@ -128,10 +128,13 @@ If you lack GCE access, see the Colab TPU v2 fallback note in `01_setup/README.m
 │   └── README.md
 ├── 06_misreported_state_torchtpu/       Module 6: Misreported state on TorchTPU (Part 3)
 │   ├── lab05.py                         → Loads 05 by path, one class identity
+│   ├── labels.py                        → The words for whose labels were used
+│   ├── student_set.py                   → Builds the 22-record student eval set
 │   ├── run.py                           → 05's judge; backend recorded and checked
+│   ├── compare_readers.py               → Rules, judge, labels: one row per record
 │   ├── parity.py                        → jax vs torchtpu agreement, kappa, guard
 │   ├── bridge.py                        → Verdicts → rai-checklist-cli shapes
-│   ├── build_review_files.py            → Cuts the 60 + 14 review records
+│   ├── build_review_files.py            → Cuts the 60 + 14 review records + student sample
 │   ├── xla_cache.sh                     → XLA cache push/restore per backend
 │   ├── data/staging/                    → Tamper drafts + review files (pre-adjudication)
 │   ├── published/                       → Committed Part 3 result files

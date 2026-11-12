@@ -15,8 +15,12 @@ enforcement is operator policy and never model output (05's verdict_to_dict
 says so in the verdict's policy object), so it lives in its own policy
 block and never inside a section's findings. A provenance block carries the
 run's model, backend, prompt hash, parse errors and commit so an auditor
-can trace the report back to a run log. A verdict the schema rejects makes
-the bridge exit 2 with nothing written; any other error exits 1.
+can trace the report back to a run log. It also carries the run log's
+statement of where the judged records' labels came from (labels.py). The
+report itself shows judge flags only and reads no label; the line is there
+so a reader comparing the report with a scored table knows whose labels
+that table used. A verdict the schema rejects makes the bridge exit 2 with
+nothing written; any other error exits 1.
 
 Usage:
     python 06_misreported_state_torchtpu/bridge.py \
@@ -72,6 +76,7 @@ PROVENANCE_FIELDS: tuple[str, ...] = (
     "container_image_digest",
 )
 POLICY_SENTENCE = "Recommended enforcement is operator policy applied after the verdict, never model output."
+LABELS_SENTENCE = "This report shows what the judge flagged. No label was read to build it."
 
 
 def title_for(state: str) -> str:
@@ -139,7 +144,14 @@ def provenance_block(metadata: dict[str, Any]) -> dict[str, Any]:
     block = {field: metadata.get(field, UNRECORDED) for field in PROVENANCE_FIELDS}
     git = metadata.get("git")
     block["git_sha"] = git.get("sha", UNRECORDED) if isinstance(git, dict) else UNRECORDED
+    block["label_sources"] = label_statement(metadata)
     return block
+
+
+def label_statement(metadata: dict[str, Any]) -> str:
+    """The run log's own words for whose labels the judged records carried. 05's runner records none."""
+    sources = metadata.get("label_sources")
+    return sources.get("statement", UNRECORDED) if isinstance(sources, dict) else UNRECORDED
 
 
 def render_yaml(metadata: dict[str, Any], verdicts: dict[str, dict[str, Any]]) -> str:
@@ -179,7 +191,7 @@ def render_markdown(metadata: dict[str, Any], verdicts: dict[str, dict[str, Any]
     lines += ["", "## Provenance", ""]
     for key, value in provenance.items():
         lines.append(f"- {key}: {value}")
-    lines.append("")
+    lines += ["", LABELS_SENTENCE, ""]
     return "\n".join(lines)
 
 
@@ -203,6 +215,11 @@ def main(args: argparse.Namespace) -> None:
     for title, row in section_rows(verdicts).items():
         table.add_row(title, row["status"], str(row["flagged_count"]))
     console.print(table)
+    console.print(
+        f"Labels on the judged records: {label_statement(metadata)}. {LABELS_SENTENCE}",
+        highlight=False,
+        soft_wrap=True,
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:

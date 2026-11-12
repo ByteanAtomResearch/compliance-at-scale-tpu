@@ -22,6 +22,8 @@ The blog counts parts and the repo counts modules.
 
 The second addition is the backend. Parts 1 and 2 ran the judge on the JAX backend, vllm-tpu. Part 3 moves 05's judge, with the same checkpoint, prompts and sampling settings, to native PyTorch on vLLM-TorchTPU. `parity.py` is the proof that the verdicts did not change in the move: it compares the two runs state by state, and it refuses to compare runs that differ in anything except the backend. The claim covers the backend move and nothing wider, and it stays unmeasured until the Lab G runs exist.
 
+New here? Start with the [Reader track](#reader-track), the shortest path through the lab.
+
 Everything else is 05's. 06 imports 05's schema, corpus loader, prompts, band selection, run metadata, verdict assembly and scorer by path, and changes none of them. `git diff --stat main -- 05_trajectory_eval 04_integration_demo` prints nothing on this branch.
 
 ## Module map
@@ -68,6 +70,92 @@ git diff --stat main -- 05_trajectory_eval 04_integration_demo
 Checkpoint: the test run ends in `OK` with 278 tests, and the diff prints nothing.
 
 Every lab below has the same five parts: an objective, a prediction you write down before running, one deliberate failure, a checkpoint you do not move past, and an exercise answered against 05's own code or results.
+
+## Reader track
+
+The shortest path for someone who is not the author: rehearse on a laptop, run the eight tamper records through the judge on one backend, check that the backend agrees with itself, and render the report. Every command here already appears in "Run it end to end" below; this track points the same commands at the tamper drafts.
+
+Adjudicating the 60 review records, the 14 policy pairs and the 8 tamper records is author work. It is Lab C, and it is not part of the reader track. So this track judges the tamper drafts as staged files with proposed labels. Its output is practice, never a result, and none of it goes into `published/`.
+
+**R.0 `laptop`** Set up and rehearse. This is steps 0.1 and 0.2.
+
+```bash
+git checkout part3-module06
+uv venv --python 3.12 .venv-local && source .venv-local/bin/activate
+uv pip install rich pyyaml
+make test
+make misreport-rehearsal
+```
+
+Observed: `Ran 278 tests` then `OK`, then `Rehearsal passed: 6 of 6 steps, no TPU, no judge.`
+
+**R.1 `laptop`** Dry-run the eight tamper records, using the stand-in band report R.0 wrote. No vllm is imported.
+
+```bash
+python 06_misreported_state_torchtpu/run.py --backend torchtpu \
+  --model RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic --staged \
+  --input 06_misreported_state_torchtpu/data/staging/candidates_tamper_batch1.jsonl \
+  --bands-report results/rehearsal/stand_in_bands_tamper.json --dry-run \
+  --output results/reader_plan.json
+```
+
+Observed: `band 448: 8 records -> 48 prompts`, then `Plan written to results/reader_plan.json. No TPU run occurred.`
+
+**R.2 `TPU` `HF_TOKEN` `human`** Create the VM, check the chips and install, exactly as steps A.1, A.2 and A.3 do. The rest of the track runs on the VM, in the `~/torchtpu` venv.
+
+Expect: one `vllm-torchtpu` line from `uv pip list | grep -i vllm`.
+
+**R.3 `TPU` `HF_TOKEN`** Build a band report for the tamper drafts with the 26B tokenizer.
+
+```bash
+export TAMPER=06_misreported_state_torchtpu/data/staging/candidates_tamper_batch1.jsonl
+python 05_trajectory_eval/bands.py --staged --corpus "$TAMPER" \
+  --tokenizer "$MODEL" --output results/reader_bands.json
+```
+
+Expect: `Band report written to results/reader_bands.json`
+
+**R.4 `TPU` `HF_TOKEN`** Judge the eight records on TorchTPU, twice. The second run is what parity compares against. `--dtype` is left at its default, `bfloat16`, which is 05's value; whether this FP8 checkpoint needs `--dtype auto` is one of the things Lab A measures.
+
+```bash
+export VLLM_XLA_CACHE_PATH=~/xla_cache_torchtpu
+for n in 1 2; do
+  python 06_misreported_state_torchtpu/run.py --backend torchtpu --model "$MODEL" --staged \
+    --input "$TAMPER" --bands-report results/reader_bands.json \
+    --eval-set --output results/reader_run$n.json 2>&1 | tee results/reader_run$n.log
+done
+grep -h parse_errors results/reader_run1.json results/reader_run2.json
+```
+
+Expect: `Results written to results/reader_run1.json`, the same for `reader_run2.json`, then two `parse_errors` lines.
+
+**R.5 `TPU`** Parity, as the determinism control from Lab E: one backend against itself.
+
+```bash
+python 06_misreported_state_torchtpu/parity.py \
+  --left results/reader_run1.json --left-name torchtpu_run1 \
+  --right results/reader_run2.json --right-name torchtpu_run2 \
+  --output results/reader_parity.json
+```
+
+Expect: `Parity report written to results/reader_parity.json`, covering 48 state decisions.
+
+**R.6 `TPU`** The bridge.
+
+```bash
+python 06_misreported_state_torchtpu/bridge.py \
+  --verdicts results/reader_run1.json \
+  --markdown results/reader_report.md --yaml results/reader_report.yaml
+head -40 results/reader_report.yaml
+```
+
+Expect: `Wrote results/reader_report.md` and `Wrote results/reader_report.yaml`, then a YAML with six sections under `rai_evaluation`.
+
+**R.7 `TPU` `human`** Copy the results back and delete the VM, exactly as step A.8 does.
+
+Expect: the `reader_*` files under `results/smoke/` on your machine, and no VM left running.
+
+To compare the two backends, add a third run in the `vllm/vllm-tpu:gemma4` container with `--backend jax`, the way step G.4 runs `run.py` there, and give parity that file as `--left`. Then compare what the judge flagged with the proposed labels in "The tamper set". Whether it flags records 004 and 005 is the question this module exists to ask.
 
 ## Run it end to end
 

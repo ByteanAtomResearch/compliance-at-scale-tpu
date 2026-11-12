@@ -63,6 +63,8 @@ Each step also says where it runs: `laptop` or `VM`.
 
 The lab's files all land under `results/student/`, which is gitignored. The rule for them is the lab's rule for everything: a number goes in your notes only when one of those files holds it.
 
+Keep a run log as you go. [RUNLOG.md](RUNLOG.md) is a template with one block per step: your prediction, the command you ran, pass or fail, the output pasted in, the time it took, and your notes. Fill it in on your machine. It is also how to send feedback on the lab: a step that failed or an Expect line that did not match is exactly what it is for.
+
 ### Step 1: setup and laptop rehearsal
 
 `laptop`. Build a small venv for tests and data prep, run the tests, then rehearse the whole lab with nothing loaded.
@@ -80,7 +82,7 @@ make misreport-rehearsal
 
 The venv skips `pip install -e .` on purpose: the pyproject's `vllm-tpu` dependency does not install on a Mac, and the tests mock vllm and jax.
 
-**Observed:** `Ran 349 tests` then `OK`. Then the rehearsal's summary, 11 steps, ending `Rehearsal passed: 11 of 11 steps, no TPU, no judge.` The full output is under [Laptop rehearsal: observed output](#laptop-rehearsal-observed-output).
+**Observed:** `Ran 351 tests` then `OK`. Then the rehearsal's summary, 11 steps, ending `Rehearsal passed: 11 of 11 steps, no TPU, no judge.` The full output is under [Laptop rehearsal: observed output](#laptop-rehearsal-observed-output).
 
 **Checkpoint:** step 10 of the rehearsal reports that 131 of 132 decisions agree. Where did the one disagreement come from, and what does it tell you about the judge?
 
@@ -142,7 +144,7 @@ The tool takes a single letter, then Enter:
 
 Its prompt renders without the bracketed letters, as `ccept  lean  dit  eject  kip  uit >`. On a record that proposes no violation, `a` is refused and the tool asks for `c` or `e`.
 
-`make misreport-student-set` then folds your decisions over the eight staged records and appends the 14-record sample untouched. It refuses, with exit 2, while any of the eight is undecided. Run `adjudicate.py` again with the same paths to finish; it picks up where you stopped.
+`make misreport-student-set` then folds your decisions over the eight staged records and appends the 14-record sample untouched. It refuses, with exit 2, while any of the eight is undecided. Run `adjudicate.py` again with the same paths to finish; it picks up where you stopped. To start the review over, delete `results/student/tamper_labels.jsonl` and `results/student/tamper_rejections.jsonl`.
 
 **Observed**, with the keys piped in under the name `rehearsal-fixture` (accept on the five with a proposal, clean on the three without): `8 candidates pending (8 staged, 0 already decided)`, then `Session done: 8 promoted, 0 rejected.` Then the build:
 
@@ -469,11 +471,12 @@ Everything else is 05's. 06 imports 05's schema, corpus loader, prompts, band se
 | `results/student/` | Where the student track writes everything: your adjudication of the eight, the eval set, the run logs, the tables. Gitignored. |
 | `data/tamper_corpus.jsonl`, `data/tamper_rejections.jsonl` | Author track only. Created by `adjudicate.py --corpus --rejections` when the maintainer reviews the eight for the article. Not committed until then. |
 | `published/` | Author track only. Committed home for the Part 3 result files after the full-corpus runs. `results/` is gitignored at every depth, so a number in the post has to point at a file here. |
+| `RUNLOG.md` | A run log template for the student track: one block per step, for the command run, pass or fail, pasted output, time taken and notes. |
 | `AUTHOR_TRACK.md` | The optional appendix: the 60 + 14 adjudication, the Part 2 freeze and tag, the merge rule, the full-corpus runs. |
 
 `parity.py`, `bridge.py`, `student_set.py` and `compare_readers.py` exit 2 when they refuse their inputs (a guard or a validation failure) and 1 on any other error, so a script can tell a refusal from a crash.
 
-Tests live beside 05's in `tests/`: `test_misreport_data.py`, `test_misreport_runner.py`, `test_misreport_parity.py`, `test_misreport_bridge.py`. `test_misreport_student_set.py` covers the student eval set and the label-source wording, and `test_misreport_rehearsal.py` covers the rehearsal. `make test` runs 349 tests on this branch, with no TPU and no vllm.
+Tests live beside 05's in `tests/`: `test_misreport_data.py`, `test_misreport_runner.py`, `test_misreport_parity.py`, `test_misreport_bridge.py`. `test_misreport_student_set.py` covers the student eval set and the label-source wording, and `test_misreport_rehearsal.py` covers the rehearsal. `make test` runs 351 tests on this branch, with no TPU and no vllm.
 
 ## What `--backend` may and may not do
 

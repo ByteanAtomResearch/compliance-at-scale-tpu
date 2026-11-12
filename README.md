@@ -138,6 +138,7 @@ If you lack GCE access, see the Colab TPU v2 fallback note in `01_setup/README.m
 │   ├── xla_cache.sh                     → XLA cache push/restore per backend
 │   ├── data/staging/                    → Tamper drafts + review files (pre-adjudication)
 │   ├── published/                       → Committed Part 3 result files
+│   ├── RUNLOG.md                        → Run log template for the student track
 │   ├── AUTHOR_TRACK.md                  → Optional appendix: freeze, tag, full-corpus runs
 │   └── README.md
 ├── notebooks/

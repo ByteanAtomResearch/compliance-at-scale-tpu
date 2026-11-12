@@ -682,6 +682,26 @@ class TestStudentTrackDoc(unittest.TestCase):
                     for flag in re.findall(r"(--[a-z][a-z-]*)", after):
                         self.assertIn(flag, known, f"{script}: {flag}")
 
+    def test_runlog_template_has_one_block_per_step_with_the_five_fields(self):
+        runlog = (_LAB06 / "RUNLOG.md").read_text(encoding="utf-8")
+        blocks = [block for block in runlog.split("\n## ")[1:] if block.startswith("Step ")]
+        titles = [block.split("\n", 1)[0] for block in blocks]
+        self.assertEqual(titles, [f"Step {n}: {title}" for n, title in enumerate(self.STEPS, start=1)])
+        for block in blocks:
+            title = block.split("\n", 1)[0]
+            for field in ("**Command run:**", "**Pass / fail:**", "**Output:**", "**Time taken:**", "**Notes:**"):
+                self.assertEqual(block.count(field), 1, f"{title}: {field}")
+            self.assertIn("```text", block, title)
+        self.assertIn("[RUNLOG.md](RUNLOG.md)", self.sections["Student track"])
+
+    def test_runlog_template_is_empty_and_holds_no_number(self):
+        runlog = (_LAB06 / "RUNLOG.md").read_text(encoding="utf-8")
+        self.assertIn("Never paste a Hugging Face token", runlog)
+        for block in runlog.split("\n## ")[1:]:
+            if block.startswith("Step "):
+                self.assertRegex(block, r"\*\*Pass / fail:\*\*\n")
+                self.assertIn("```text\n\n```", block)
+
     def test_student_outputs_never_point_at_published_or_the_part_2_corpus(self):
         track = self.sections["Student track"]
         self.assertNotIn("published/", track)

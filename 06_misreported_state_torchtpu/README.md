@@ -42,7 +42,7 @@ Everything else is 05's. 06 imports 05's schema, corpus loader, prompts, band se
 | `parity.py` | Compares two verdict files state by state: agreement, Cohen's kappa, precision and recall deltas with `--labels`. Refuses to compare runs that differ in anything but the backend. Gives counts in place of rates for a tier under ten records or a state under five labelled positives. |
 | `bridge.py` | Turns a verdict file into the Markdown and YAML shapes Module 04 feeds to rai-checklist-cli, for the six states, with operator policy in its own block. |
 | `build_review_files.py` | Cuts three files from `sample_data/staging/candidates_tier2_batch1.jsonl` by id: the 60-record review file, the 14-record policy_withheld top-up, and the 14-record student sample. `--check` proves the committed files match. |
-| `rehearsal.py` | `make misreport-rehearsal`: runs every laptop-only step of Labs B, D, E and F, with fixture verdicts standing in for judge runs, and exits 1 on any mismatch. |
+| `rehearsal.py` | `make misreport-rehearsal`: runs every step a laptop can run, 11 in all, and exits 1 on any mismatch. Steps 1 to 6 check the staged files and the tools. Steps 7 to 11 dry-run the student track on fixtures: a piped adjudication, the eval set build, the run plan on both backends and the E4B fallback, the three-reader table, parity and the bridge. |
 | `xla_cache.sh` | XLA cache push and restore under a per-backend GCS prefix. 05's `cache_helper.sh` hardcodes `part2`. |
 | `data/staging/` | The 8 tamper drafts (AI-assisted, see "The tamper set"), the 60 review records, the 14 top-up records, the 14-record student sample. Unreviewed, like `sample_data/staging/`. |
 | `data/tamper_corpus.jsonl`, `data/tamper_rejections.jsonl` | Created by `adjudicate.py --corpus --rejections` during review. Not committed until then. |
@@ -50,7 +50,7 @@ Everything else is 05's. 06 imports 05's schema, corpus loader, prompts, band se
 
 `parity.py`, `bridge.py`, `student_set.py` and `compare_readers.py` exit 2 when they refuse their inputs (a guard or a validation failure) and 1 on any other error, so a script can tell a refusal from a crash.
 
-Tests live beside 05's in `tests/`: `test_misreport_data.py`, `test_misreport_runner.py`, `test_misreport_parity.py`, `test_misreport_bridge.py`. `test_misreport_student_set.py` covers the student eval set and the label-source wording, and `test_misreport_rehearsal.py` covers the rehearsal. `make test` runs 328 tests on this branch, with no TPU and no vllm.
+Tests live beside 05's in `tests/`: `test_misreport_data.py`, `test_misreport_runner.py`, `test_misreport_parity.py`, `test_misreport_bridge.py`. `test_misreport_student_set.py` covers the student eval set and the label-source wording, and `test_misreport_rehearsal.py` covers the rehearsal. `make test` runs 339 tests on this branch, with no TPU and no vllm.
 
 ## What `--backend` may and may not do
 
@@ -74,7 +74,7 @@ make test
 git diff --stat main -- 05_trajectory_eval 04_integration_demo
 ```
 
-Checkpoint: the test run ends in `OK` with 328 tests, and the diff prints nothing.
+Checkpoint: the test run ends in `OK` with 339 tests, and the diff prints nothing.
 
 Every lab below has the same five parts: an objective, a prediction you write down before running, one deliberate failure, a checkpoint you do not move past, and an exercise answered against 05's own code or results.
 
@@ -94,7 +94,7 @@ make test
 make misreport-rehearsal
 ```
 
-Observed: `Ran 328 tests` then `OK`, then `Rehearsal passed: 6 of 6 steps, no TPU, no judge.`
+Observed: `Ran 339 tests` then `OK`, then `Rehearsal passed: 11 of 11 steps, no TPU, no judge.`
 
 **R.1 `laptop`** Dry-run the eight tamper records, using the stand-in band report R.0 wrote. No vllm is imported.
 
@@ -189,17 +189,17 @@ make test
 git diff --stat main -- 05_trajectory_eval 04_integration_demo
 ```
 
-Observed: `Ran 328 tests` then `OK`; the diff prints nothing.
+Observed: `Ran 339 tests` then `OK`; the diff prints nothing.
 
-**0.2 `laptop`** Rehearse every laptop-only step of Labs B, D, E and F in one command. It exits 1 on any mismatch.
+**0.2 `laptop`** Rehearse every step a laptop can run in one command. It exits 1 on any mismatch.
 
 ```bash
 make misreport-rehearsal
 ```
 
-Observed: `Rehearsal passed: 6 of 6 steps, no TPU, no judge.`
+Observed: `Rehearsal passed: 11 of 11 steps, no TPU, no judge.`
 
-The rehearsal writes plans and fixture verdict files under `results/rehearsal/`. The fixtures are built from the tamper drafts' proposed labels with one disagreement planted. No judge produced them, they are marked `rehearsal_fixture`, and they never go into `published/`. Steps D.2, E.1, E.2, F.1 and F.2 below reuse them, so run 0.2 first.
+The rehearsal writes plans and fixture verdict files under `results/rehearsal/`. The fixtures are built from the tamper drafts' proposed labels with one disagreement planted. No judge produced them, they are marked `rehearsal_fixture`, and they never go into `published/`. Steps D.2, E.1, E.2, F.1 and F.2 below reuse them, so run 0.2 first. Its last five steps dry-run the student track under `results/rehearsal/student/`; the full output is under "Laptop rehearsal: observed output".
 
 ### Lab A: smoke test
 
@@ -461,7 +461,7 @@ Expect: `PRE-FREEZE DRAFT` in the status line. Needs the Lab A files.
 make test
 ```
 
-Observed: `Ran 328 tests` then `OK`.
+Observed: `Ran 339 tests` then `OK`.
 
 **D.2 `laptop`** Dry-run 06's runner and compare its plan with 05's. This uses the stand-in band report and 05 plan that step 0.2 wrote.
 
@@ -1101,6 +1101,53 @@ Under the parity fallback, Tables 2, 5 and 6 cite `published/06_parity_e4b.json`
 **Table 5: Throughput by length band, per backend.** Ceiling, prompts, wall times. Source: `published/06_parity.json`, key `per_side.<side>.bands`. `[MEASURED: pending]`
 
 **Table 6: The policy_withheld prediction.** `authorization_bypass` recall by variant, per backend. Source: `published/06_parity.json`, key `labels.variant_recall`. `[MEASURED: pending]`
+
+## Laptop rehearsal: observed output
+
+`make misreport-rehearsal`, run on a laptop on Nov 12, 2026 in the local venv (`rich` and `pyyaml` only, no vllm, no token). It first echoes each command it runs, 22 of them, as `$ python ...` lines you can paste into a shell. Then it prints this summary. The repo path is trimmed from the last line.
+
+```text
+1. review files: ok
+     3 review files compared to a rebuild, 0 differ
+2. staged load: ok
+     loaded tier2_cut60=60, tier2_topup14=14, tier2_student14=14, tamper_batch1=8; cut60/topup14 overlap 0
+3. rules baseline: ok
+     8 records, 1 flagged: authorization_bypass on traj-t3-tmp-001 at step 3
+4. plan diff: ok
+     plans identical: 4 bands, 12 prompts for 2 records
+5. parity: ok
+     47 of 48 decisions agree; the planted disagreement is scope_violation on traj-t3-tmp-001
+     tampered prompt_hash: exit 2, report written: False
+6. bridge: ok
+     6 sections: 4 FAIL, 2 PASS
+     unknown state 'vibes': exit 2, report written: False
+7. student set: ok
+     nothing decided: exit 2, eval set written: False
+     8 keys piped to adjudicate.py as rehearsal-fixture: 8 promoted
+     22 records. Labels: tier authored_clean, 14 records: template-construction labels, not adjudicated; tier authored_subtle, 8 records: student-adjudicated (by rehearsal-fixture)
+8. student plan: ok
+     22 records -> 132 prompts in 1 band(s); the same plan on jax and torchtpu
+     E4B fallback (google/gemma-4-E4B-it): the same 132 prompts on both backends
+9. three readers: ok
+     8 tamper rows: the rules flag 1, the fixture judge names the labelled states on 7 (planted miss: scope_violation on traj-t3-tmp-001); 14 sample rows; rate fields in the file: 0
+     one verdict missing: exit 2, report written: False
+10. student parity: ok
+     131 of 132 decisions agree; the planted disagreement is scope_violation on traj-t3-tmp-001; both tiers reported as counts
+     labels: tier authored_clean, 14 records: template-construction labels, not adjudicated; tier authored_subtle, 8 records: student-adjudicated (by rehearsal-fixture) (--allow-staged)
+     dtype bfloat16 vs auto: exit 2, report written: False
+     E4B fallback: E4B jax vs 26B torchtpu exit 2; E4B vs E4B exit 0
+11. student bridge: ok
+     6 sections: 6 FAIL, 0 PASS; the provenance block carries the label statement
+Rehearsal passed: 11 of 11 steps, no TPU, no judge. Fixtures are under results/rehearsal and are not results.
+```
+
+How to read it:
+
+- Steps 1 to 6 check the staged files and the tools. Steps 7 to 11 are the student track with nothing loaded: step 7 is student steps 3 and 4, step 8 is the plan for steps 5 and 7, step 9 is step 6, step 10 is step 7's parity, step 11 is step 8.
+- `rehearsal-fixture` is the name the rehearsal gives `adjudicate.py` when it pipes in one key per record. No person reviewed anything. That is why the label statement reads `student-adjudicated (by rehearsal-fixture)`: the words say a review happened through `adjudicate.py`, and the name says who, or what, did it.
+- Every verdict file here is a fixture read off the labels, with one detection removed from the torchtpu side. `131 of 132` is that planted disagreement. It says nothing about a judge.
+- `1 band(s)` comes from a whitespace stand-in for the tokenizer. The real band count comes from `bands.py` with the model's tokenizer, on the VM.
+- `6 FAIL, 0 PASS` in step 11 is the fixture too: a verdict file read off the labels flags every state somewhere.
 
 ## What is not grounded yet
 

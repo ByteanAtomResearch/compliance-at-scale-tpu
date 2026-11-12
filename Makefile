@@ -84,7 +84,7 @@ misreport-student-set: ## Build the student eval set: the eight you adjudicated 
 		--output $(STUDENT_DIR)/eval_set.jsonl \
 		$(ARGS)
 
-misreport-rehearsal: ## Rehearse every laptop-only 06 step on fixtures; fails on any mismatch (no TPU)
+misreport-rehearsal: ## Rehearse every laptop-only 06 step, student track included, on fixtures (no TPU)
 	python $(MISREPORT_DIR)/rehearsal.py
 
 misreport-corpus: ## Concatenate 05's adjudicated corpus and 06's tamper corpus (after Lab C)

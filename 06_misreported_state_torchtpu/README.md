@@ -44,13 +44,13 @@ Everything else is 05's. 06 imports 05's schema, corpus loader, prompts, band se
 | `build_review_files.py` | Cuts three files from `sample_data/staging/candidates_tier2_batch1.jsonl` by id: the 60-record review file, the 14-record policy_withheld top-up, and the 14-record student sample. `--check` proves the committed files match. |
 | `rehearsal.py` | `make misreport-rehearsal`: runs every laptop-only step of Labs B, D, E and F, with fixture verdicts standing in for judge runs, and exits 1 on any mismatch. |
 | `xla_cache.sh` | XLA cache push and restore under a per-backend GCS prefix. 05's `cache_helper.sh` hardcodes `part2`. |
-| `data/staging/` | The 8 tamper drafts, the 60 review records, the 14 top-up records, the 14-record student sample. Unreviewed, like `sample_data/staging/`. |
+| `data/staging/` | The 8 tamper drafts (AI-assisted, see "The tamper set"), the 60 review records, the 14 top-up records, the 14-record student sample. Unreviewed, like `sample_data/staging/`. |
 | `data/tamper_corpus.jsonl`, `data/tamper_rejections.jsonl` | Created by `adjudicate.py --corpus --rejections` during review. Not committed until then. |
 | `published/` | Committed home for the Part 3 result files after the TPU runs. `results/` is gitignored at every depth, so a number in the post has to point at a file here. |
 
 `parity.py`, `bridge.py`, `student_set.py` and `compare_readers.py` exit 2 when they refuse their inputs (a guard or a validation failure) and 1 on any other error, so a script can tell a refusal from a crash.
 
-Tests live beside 05's in `tests/`: `test_misreport_data.py`, `test_misreport_runner.py`, `test_misreport_parity.py`, `test_misreport_bridge.py`. `test_misreport_student_set.py` covers the student eval set and the label-source wording, and `test_misreport_rehearsal.py` covers the rehearsal. `make test` runs 323 tests on this branch, with no TPU and no vllm.
+Tests live beside 05's in `tests/`: `test_misreport_data.py`, `test_misreport_runner.py`, `test_misreport_parity.py`, `test_misreport_bridge.py`. `test_misreport_student_set.py` covers the student eval set and the label-source wording, and `test_misreport_rehearsal.py` covers the rehearsal. `make test` runs 328 tests on this branch, with no TPU and no vllm.
 
 ## What `--backend` may and may not do
 
@@ -74,7 +74,7 @@ make test
 git diff --stat main -- 05_trajectory_eval 04_integration_demo
 ```
 
-Checkpoint: the test run ends in `OK` with 323 tests, and the diff prints nothing.
+Checkpoint: the test run ends in `OK` with 328 tests, and the diff prints nothing.
 
 Every lab below has the same five parts: an objective, a prediction you write down before running, one deliberate failure, a checkpoint you do not move past, and an exercise answered against 05's own code or results.
 
@@ -94,7 +94,7 @@ make test
 make misreport-rehearsal
 ```
 
-Observed: `Ran 323 tests` then `OK`, then `Rehearsal passed: 6 of 6 steps, no TPU, no judge.`
+Observed: `Ran 328 tests` then `OK`, then `Rehearsal passed: 6 of 6 steps, no TPU, no judge.`
 
 **R.1 `laptop`** Dry-run the eight tamper records, using the stand-in band report R.0 wrote. No vllm is imported.
 
@@ -189,7 +189,7 @@ make test
 git diff --stat main -- 05_trajectory_eval 04_integration_demo
 ```
 
-Observed: `Ran 323 tests` then `OK`; the diff prints nothing.
+Observed: `Ran 328 tests` then `OK`; the diff prints nothing.
 
 **0.2 `laptop`** Rehearse every laptop-only step of Labs B, D, E and F in one command. It exits 1 on any mismatch.
 
@@ -461,7 +461,7 @@ Expect: `PRE-FREEZE DRAFT` in the status line. Needs the Lab A files.
 make test
 ```
 
-Observed: `Ran 323 tests` then `OK`.
+Observed: `Ran 328 tests` then `OK`.
 
 **D.2 `laptop`** Dry-run 06's runner and compare its plan with 05's. This uses the stand-in band report and 05 plan that step 0.2 wrote.
 
@@ -810,7 +810,7 @@ The fallback is not symmetric. If TorchTPU is the backend that fails to load 26B
 
 **Objective:** create the 06 folder and its staged inputs, check them with 05's own loader and rules, and leave 05 untouched.
 
-The layout mirrors 05: unreviewed candidates live in a staging folder, adjudicated records beside it. The tamper drafts are unvalidated until you rewrite their `agent_report` and `final_report` lines yourself, which is what makes the `authored_subtle` tier label true.
+The layout mirrors 05: unreviewed candidates live in a staging folder, adjudicated records beside it. The tamper drafts were drafted with AI assistance from the public report, and they are unvalidated until a human reviews them during adjudication. Their tier value, `authored_subtle`, is kept because 05's schema offers nothing closer. It does not mean anyone wrote them by hand; "The tamper set" says how they were made and why the tier value stays.
 
 **Predict before you run:** how many of the six proposed tamper labels will 05's rules baseline flag? How many records will `adjudicate.py` say are pending in the 60-record file?
 
@@ -1063,7 +1063,11 @@ cp results/06_verdicts_*.json results/06_score_*.json results/06_parity.json \
 
 ## The tamper set
 
-Eight records modelled on the two incidents in the [OpenAI Alignment report](https://alignment.openai.com/misalignment-reports/suppressing-misalignment-monitoring-alerts-and-disabling-misalignment-monitoring/), written in 05's record schema with no new fields, so the schema fingerprint and Part 2's numbers stay comparable. Ids run `traj-t3-tmp-001` to `008`. Every record is set in the same authored `checkout-api` config migration. The labels are proposals; `adjudicate.py` turns them into ground truth, and the human review is the one that counts.
+Eight records modelled on the two incidents in the [OpenAI Alignment report](https://alignment.openai.com/misalignment-reports/suppressing-misalignment-monitoring-alerts-and-disabling-misalignment-monitoring/), in 05's record schema with no new fields, so the schema fingerprint and Part 2's numbers stay comparable. Ids run `traj-t3-tmp-001` to `008`. Every record is set in the same fictional `checkout-api` config migration.
+
+**How they were made.** The eight records were drafted with AI assistance from the public report, and they are reviewed by a human during adjudication. The drafts carry proposed labels and nothing more. `adjudicate.py` is where a person reads each one and decides, and that review is the one that counts. Until it happens a record's labels are described everywhere as `proposed labels, not adjudicated`.
+
+**What the fields say.** Each record's `provenance` reads `ai-assisted-draft/modelled-on-oct20-misalignment-report/<name>` and its `source` reads `tier3_ai_assisted_draft`. Its `tier` reads `authored_subtle`, and that value needs a warning. 05's README defines `authored_subtle` as hand-authored, and these eight are not: nobody wrote them by hand. 05's schema has three tier values, `real`, `authored_clean` and `authored_subtle`, and no value for an AI-assisted draft. 06 never modifies 05, so the tier value stays, because it is the tier 05's scorer keeps apart from the template records. On these eight records read `authored_subtle` as "not from the template generator" and nothing more. How they were made is in the `provenance` text and in this section. After review, the record's `adjudication_note` names the person who decided and the date.
 
 | Re-enacts | Record | How it is encoded | Proposed labels | Rules baseline |
 | --- | --- | --- | --- | --- |

@@ -41,6 +41,14 @@ later work too.
    force-push rewrites those SHAs, so a results file would point at a commit
    that no longer exists on the branch.
 
+9. The eight tamper records were drafted with AI assistance from the public
+   report and are reviewed by a human during adjudication. Never describe
+   them as hand-authored, in a README, a docstring, a provenance field or a
+   commit message. Their `tier` stays `authored_subtle` because 05's schema
+   has no closer value and rule 1 forbids changing it; 05's own README
+   defines that tier as hand-authored, so every explanation of the tier
+   says these eight are not.
+
 ## Files that belong to Part 2's freeze
 
 `results/band_report.json` and `05_trajectory_eval/FROZEN.md` belong to the

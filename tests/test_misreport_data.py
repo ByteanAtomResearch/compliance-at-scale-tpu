@@ -5,7 +5,9 @@ The review files under 06_misreported_state_torchtpu/data/staging/ are cut
 from sample_data/staging/candidates_tier2_batch1.jsonl by id. These tests
 pin two things: the committed files are byte for byte what
 build_review_files.py produces, and every staged file in 06 loads through
-05's own loader. No TPU, no vllm.
+05's own loader. A third class pins how the eight tamper records describe
+their own origin: drafted with AI assistance, never hand-authored. No TPU,
+no vllm.
 """
 
 import importlib.util
@@ -87,6 +89,47 @@ class TestCommittedFiles(unittest.TestCase):
         self.assertTrue(all(r.variant in ("policy_visible", "policy_withheld") for r in topup))
         # Nothing staged is adjudicated: adjudicate.py is still the only path in.
         self.assertFalse(any(r.adjudicated for r in cut60 + topup + tamper))
+
+
+class TestTamperProvenance(unittest.TestCase):
+    """The eight were drafted with AI assistance from the public report. Nothing may say otherwise."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tamper = _corpus.load_staged(_STAGING / "candidates_tamper_batch1.jsonl")
+        cls.readme = (_LAB06 / "README.md").read_text(encoding="utf-8")
+
+    def test_provenance_text_says_ai_assisted_draft_modelled_on_the_report(self):
+        for record in self.tamper:
+            self.assertTrue(
+                record.provenance.startswith("ai-assisted-draft/modelled-on-oct20-misalignment-report/"), record.id
+            )
+            self.assertLessEqual(len(record.provenance), _schema.MAX_SHORT_CHARS, record.id)
+            self.assertEqual(record.source, "tier3_ai_assisted_draft", record.id)
+
+    def test_no_free_text_field_claims_the_records_were_authored(self):
+        for record in self.tamper:
+            for field in (record.provenance, record.source, record.adjudication_note):
+                self.assertNotIn("authored", field, record.id)
+                self.assertNotIn("hand", field.split("/")[0], record.id)
+
+    def test_tier_value_is_kept_because_05s_vocabulary_has_no_closer_word(self):
+        self.assertEqual({record.tier for record in self.tamper}, {"authored_subtle"})
+        self.assertEqual(_schema.TIERS, ("real", "authored_clean", "authored_subtle"))
+
+    def test_readme_states_how_the_records_were_made(self):
+        self.assertIn("drafted with AI assistance from the public report", self.readme)
+        self.assertIn("reviewed by a human during adjudication", self.readme)
+        self.assertIn("nobody wrote them by hand", self.readme)
+
+    def test_readme_never_asks_for_or_claims_hand_authoring(self):
+        lowered = self.readme.lower()
+        for phrase in ("hand-authored tamper", "rewrite their", "wrote the tamper", "authored `checkout-api`"):
+            self.assertNotIn(phrase, lowered)
+        # The one place hand-authoring is mentioned is the warning that 05's tier definition does not apply.
+        mentions = [line for line in self.readme.splitlines() if "hand-authored" in line]
+        self.assertEqual(len(mentions), 1)
+        self.assertIn("these eight are not", mentions[0])
 
 
 if __name__ == "__main__":

@@ -1099,3 +1099,7 @@ Under the parity fallback, Tables 2, 5 and 6 cite `published/06_parity_e4b.json`
 - The Lab G JAX container command in "Run it end to end" (the XLA cache mount, the digest read with `docker inspect`) and the `huggingface_hub` one-liner for `MODEL_REVISION`. They are written from the tools' documented behaviour and have not been run.
 - What to record as `CONTAINER_IMAGE_DIGEST` for the TorchTPU venv. 05's metadata assumes a container. Hashing `uv pip freeze` is a suggestion, not 05's rule.
 - The `bands.py --tokenizer` path for the 26B checkpoint needs a Hugging Face token. The tests and the Lab D plan diff use a whitespace tokenizer stand-in so they run anywhere.
+
+## What's next
+
+On Nov 2, 2026, MIT CSAIL's ["Sparks of Weight-Space Programming"](https://rikiyat.github.io/blog/weight-space-programming/) showed GPT-6 Astra, the model named in the second incident, editing another model's weights. Judging agents that edit weights is future work, and nothing in this module tests it.

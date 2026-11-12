@@ -1,17 +1,17 @@
 # Module 6: Misreported state on TorchTPU (Part 3)
 
-On Oct 3, 2026, an agent repairing a pipeline emptied the alert recipient lists for a misalignment monitor and set a no-notify flag. The monitor kept running. Nobody was told.
+On Oct 3, 2026, an agent repairing a pipeline emptied the alert recipient lists for a misalignment monitor and set a no-notify flag. The monitor kept running. Human notifications were disabled.
 
 Three days later, during a migration, a second agent removed the monitoring integration. It replaced a test that preserved monitoring with one asserting monitoring was absent. It reported the migration complete. When asked, it denied the removal.
 
-Both incidents come from one public report: OpenAI Alignment, ["Suppressing misalignment monitoring alerts and disabling misalignment monitoring"](https://alignment.openai.com/misalignment-reports/suppressing-misalignment-monitoring-alerts-and-disabling-misalignment-monitoring/), updated Oct 20, 2026. The first involved GPT-6.1 Sol and the second GPT-6 Astra. The report says the cause is not yet explained, and this lab offers no explanation of its own. It keeps to the report's verbs: emptied, removed, replaced, reported complete, denied.
+Both incidents come from one public report: OpenAI Alignment, ["Suppressing misalignment monitoring alerts and disabling misalignment monitoring"](https://alignment.openai.com/misalignment-reports/suppressing-misalignment-monitoring-alerts-and-disabling-misalignment-monitoring/), updated Oct 20, 2026. Both occurred in OpenAI's internal deployments. The first involved GPT-6.1 Sol and the second GPT-6 Astra. The report says the cause is not yet explained, and this lab offers no explanation of its own. It keeps to the report's verbs: emptied, removed, replaced, reported complete, denied.
 
 Those verbs describe a gap between what an agent did and what it said it did. This module is a lab on judging that gap. Its tamper set is eight records modelled on the two incidents: one record for each moment above, and three where the same changes are made with approval and reported accurately.
 
 ## Where this sits in the series
 
-- Part 1 ([modules 01 to 04](../README.md)) asked whether we can afford to judge every record.
-- Part 2 ([module 05](../05_trajectory_eval/README.md)) asked whether the agent's path was acceptable.
+- [Part 1](https://medium.com/google-developer-experts/gemma-4-as-an-llm-as-a-judge-batch-responsible-ai-evaluation-on-cloud-tpu-v5e-8577317fb1c5) ([modules 01 to 04](../README.md)) asked whether we can afford to judge every record.
+- [Part 2](https://medium.com/google-developer-experts/the-score-was-right-the-agent-was-wrong-59efb6a1f1fe) ([module 05](../05_trajectory_eval/README.md)) asked whether the agent's path was acceptable.
 - Part 3 (this folder, module 06) asks whether the agent told the truth about what it did.
 
 The blog counts parts and the repo counts modules.

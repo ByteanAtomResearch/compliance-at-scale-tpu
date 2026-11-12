@@ -352,6 +352,8 @@ python 05_trajectory_eval/adjudicate.py --adjudicator noble \
 
 Observed: `60 candidates pending (60 staged, 0 already decided)`
 
+`adjudicate.py` takes a single letter then Enter: `a` accept, `c` clean, `e` edit, `r` reject, `s` skip, `q` quit. Its prompt renders without the bracketed letters, as `ccept  lean  dit  eject  kip  uit >`.
+
 **B.5 `laptop`** Deliberate failure: feed the loader the tamper file twice.
 
 ```bash
@@ -849,6 +851,8 @@ python 05_trajectory_eval/corpus.py --staged /tmp/dup.jsonl
 **Objective:** turn the proposed labels into ground truth by human review, then freeze 05 so every later number traces to fixed hashes.
 
 This is the one lab where no agent labels anything. A label an agent proposes and then confirms is the generator grading itself. The agent's job here is to count and check, before and after each of your sessions.
+
+`adjudicate.py` takes a single letter then Enter: `a` accept, `c` clean, `e` edit, `r` reject, `s` skip, `q` quit. Its prompt renders without the bracketed letters, as `ccept  lean  dit  eject  kip  uit >`.
 
 The freeze is Part 2's own planned step, so it is the one sanctioned change under `05_trajectory_eval/`: `freeze.py` regenerates `FROZEN.md`. Do it on `main`, as its own commit, so the `v2.0-part2` tag carries no 06 code.
 

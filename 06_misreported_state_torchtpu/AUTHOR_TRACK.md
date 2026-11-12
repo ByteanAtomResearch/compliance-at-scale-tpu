@@ -36,7 +36,7 @@ make test
 git diff --stat main -- 05_trajectory_eval 04_integration_demo
 ```
 
-Observed: `Ran 339 tests` then `OK`; the diff prints nothing.
+Observed: `Ran 349 tests` then `OK`; the diff prints nothing.
 
 **0.2 `laptop`** Rehearse every step a laptop can run in one command. It exits 1 on any mismatch.
 
@@ -308,7 +308,7 @@ Expect: `PRE-FREEZE DRAFT` in the status line. Needs the Lab A files.
 make test
 ```
 
-Observed: `Ran 339 tests` then `OK`.
+Observed: `Ran 349 tests` then `OK`.
 
 **D.2 `laptop`** Dry-run 06's runner and compare its plan with 05's. This uses the stand-in band report and 05 plan that step 0.2 wrote.
 

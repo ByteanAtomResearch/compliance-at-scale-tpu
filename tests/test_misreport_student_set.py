@@ -16,6 +16,7 @@ import argparse
 import datetime
 import importlib.util
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -575,6 +576,117 @@ class TestCompareReaders(unittest.TestCase):
             self._compare(allow_staged=False)
         self.assertNotEqual(ctx.exception.code, 2)
         self.assertIn("--allow-staged", str(ctx.exception))
+
+
+# ── The student track as written ──────────────────────────────────────────────
+
+
+class TestStudentTrackDoc(unittest.TestCase):
+    """The README is the published lab. These pin its shape, and that its commands name things that exist."""
+
+    STEPS = (
+        "setup and laptop rehearsal",
+        "meet the eight records and the rules baseline",
+        "adjudicate the eight yourself",
+        "create the VM, install, smoke check",
+        "run the judge on TorchTPU",
+        "compare three readers of the same records",
+        "the same eval set on the JAX backend, then parity",
+        "bridge to the rai-checklist-cli report",
+        "tear down the VM and confirm nothing is running",
+    )
+
+    @classmethod
+    def setUpClass(cls):
+        cls.readme = (_LAB06 / "README.md").read_text(encoding="utf-8")
+        cls.sections = {heading.split("\n", 1)[0]: heading for heading in cls.readme.split("\n## ")[1:]}
+        track = cls.sections["Student track"]
+        cls.steps = track.split("\n### ")[1:]
+
+    def test_student_track_is_the_first_path_after_the_front_matter(self):
+        order = list(self.sections)
+        self.assertEqual(order[:4], ["What you will learn", "Before you start", "Time and cost", "Student track"])
+        self.assertLess(order.index("Student track"), order.index("Module map"))
+        self.assertEqual(order[-1], "Appendix: author track (optional)")
+
+    def test_nine_steps_in_the_stated_order(self):
+        titles = [step.split("\n", 1)[0] for step in self.steps]
+        self.assertEqual(titles, [f"Step {n}: {title}" for n, title in enumerate(self.STEPS, start=1)])
+
+    def test_every_step_has_predict_command_output_and_one_checkpoint(self):
+        for step in self.steps:
+            title = step.split("\n", 1)[0]
+            self.assertEqual(step.count("**Predict:**"), 1, title)
+            self.assertEqual(step.count("**Checkpoint:**"), 1, title)
+            self.assertIn("```bash", step, title)
+            self.assertTrue("**Observed" in step or "**Expect" in step, title)
+            self.assertLess(step.index("**Predict:**"), step.index("```bash"), title)
+            self.assertGreater(step.index("**Checkpoint:**"), step.rindex("```"), title)
+            self.assertTrue("`laptop`" in step or "`VM`" in step, title)
+
+    def test_five_questions_and_three_extensions(self):
+        explain = self.sections["What you should be able to explain"]
+        self.assertEqual(
+            [line[:2] for line in explain.splitlines() if line[:2] in {f"{n}." for n in range(1, 10)}],
+            ["1.", "2.", "3.", "4.", "5."],
+        )
+        extensions = self.sections["Extension exercises"]
+        self.assertEqual(sum(1 for line in extensions.splitlines() if line[:3] in ("1. ", "2. ", "3. ", "4. ")), 3)
+
+    def test_cost_is_a_formula_with_the_machine_type_and_no_quoted_price(self):
+        cost = self.sections["Time and cost"]
+        self.assertIn("ct6e-standard-4t", cost)
+        self.assertIn("hours", cost)
+        self.assertIn("about 90 minutes", cost)
+        self.assertNotIn("$", cost)
+
+    def test_label_phrases_and_no_rates_on_eight_are_stated(self):
+        track = self.sections["Student track"]
+        self.assertIn(_labels.LABELS_STUDENT, track)
+        self.assertIn(_labels.LABELS_TEMPLATE, track)
+        self.assertIn("No rates on eight records.", track)
+
+    def test_every_script_and_staged_file_the_track_names_exists(self):
+        track = self.sections["Student track"]
+        paths = set(re.findall(r"(0[56]_[a-z_]+/[A-Za-z0-9_/.]+\.(?:py|jsonl))", track))
+        self.assertGreater(len(paths), 8)
+        for path in sorted(paths):
+            self.assertTrue((_ROOT / path).exists(), path)
+
+    def test_every_make_target_the_track_names_exists(self):
+        makefile = (_ROOT / "Makefile").read_text(encoding="utf-8")
+        targets = set(re.findall(r"^make ([a-z-]+)", self.sections["Student track"], flags=re.MULTILINE))
+        self.assertEqual(targets, {"test", "misreport-rehearsal", "misreport-student-set"})
+        for target in targets:
+            self.assertIn(f"\n{target}:", makefile)
+
+    def test_every_flag_the_track_passes_is_one_the_tool_takes(self):
+        track = self.sections["Student track"]
+        parsers = {
+            "run.py": _run.build_parser(),
+            "parity.py": _parity.build_parser(),
+            "bridge.py": _bridge.build_parser(),
+            "compare_readers.py": _readers.build_parser(),
+            "student_set.py": _student.build_parser(),
+        }
+        for script, parser in parsers.items():
+            known = {flag for action in parser._actions for flag in action.option_strings}
+            for block in re.findall(r"```bash\n(.*?)```", track, flags=re.DOTALL):
+                for command in re.split(
+                    r"\n(?=python |sudo |make |gcloud |export |curl |uv |git |mkdir |ls |head |grep |sed |exit)", block
+                ):
+                    if f"06_misreported_state_torchtpu/{script}" not in command:
+                        continue
+                    after = command.split(f"06_misreported_state_torchtpu/{script}", 1)[1].split(" | ")[0]
+                    after = after.split("2>&1")[0].split(";")[0]
+                    for flag in re.findall(r"(--[a-z][a-z-]*)", after):
+                        self.assertIn(flag, known, f"{script}: {flag}")
+
+    def test_student_outputs_never_point_at_published_or_the_part_2_corpus(self):
+        track = self.sections["Student track"]
+        self.assertNotIn("published/", track)
+        self.assertNotIn("sample_data/trajectories.jsonl", track)
+        self.assertNotIn("freeze.py", track)
 
 
 if __name__ == "__main__":

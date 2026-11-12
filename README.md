@@ -180,7 +180,11 @@ make trajectory ARGS="--band all --repeat 3"   # timed sweep on TPU
 make score                                     # judge vs rules baseline (no TPU)
 make bands                                     # token distribution + band proposal (no TPU)
 
-# Part 3: misreported state on TorchTPU (Module 6)
+# Part 3: misreported state on TorchTPU (Module 6). The student track is in the module README.
+make misreport-rehearsal                       # every step a laptop can run, student track included (no TPU)
+make misreport-student-set                     # the eight you adjudicated + the 14-record sample (no TPU)
+
+# Part 3 author track (optional appendix; needs the Part 2 freeze and the adjudicated corpus)
 make misreport-run BACKEND=jax                 # eval-set run inside the vllm-tpu container
 make misreport-run BACKEND=torchtpu            # same corpus and bands, inside the vllm-torchtpu venv
 make parity                                    # agreement + kappa; refuses on any config difference (no TPU)
@@ -283,9 +287,9 @@ Part 3 (`06_misreported_state_torchtpu/`, lab module 06) does the same kind of m
 
 Part 1 asked whether we can afford to judge every record, Part 2 asked whether the agent's path was acceptable, and Part 3 asks whether the agent told the truth about what it did. Its eight-record tamper set is modelled on the report's two incidents: in incident 1, an agent emptied a monitor's alert recipient lists and set a no-notify flag; incident 2 is the migration above. Three of the eight records are honest versions of the same changes.
 
-`run.py` runs 05's judge on a declared backend and records it in the run log, together with the commit that ran. `parity.py` compares two runs state by state with Cohen's kappa and refuses to compare runs that differ in anything but the backend. `bridge.py` turns verdicts into the rai-checklist-cli shapes from Module 4, with operator policy kept apart from the findings. 05 is imported by path and never modified. See [06_misreported_state_torchtpu/README.md](06_misreported_state_torchtpu/README.md) for the labs, the tamper set and the guardrails the module was built under.
+`run.py` runs 05's judge on a declared backend and records it in the run log, together with the commit that ran. `parity.py` compares two runs state by state with Cohen's kappa and refuses to compare runs that differ in anything but the backend. `bridge.py` turns verdicts into the rai-checklist-cli shapes from Module 4, with operator policy kept apart from the findings. 05 is imported by path and never modified. [06_misreported_state_torchtpu/README.md](06_misreported_state_torchtpu/README.md) opens with the student track: nine steps on your machine and one v6e-4 VM, about 90 minutes of hands-on time plus compile waits. You rehearse on a laptop, adjudicate the eight records yourself, run the judge on TorchTPU and on the JAX backend, compare rules, judge and your labels case by case, and tear the VM down. It needs no Part 2 freeze. The tamper set, the guardrails and an optional appendix with the author track follow it.
 
-Measured results are `[MEASURED: pending]` until the TPU runs complete; they publish with the Part 3 article and land in `06_misreported_state_torchtpu/published/`.
+Measured results are `[MEASURED: pending]` until the author track's TPU runs complete; they publish with the Part 3 article and land in `06_misreported_state_torchtpu/published/`. A student's own run writes to `results/student/`, which is gitignored and is not a published result.
 
 ## Citing this tutorial
 

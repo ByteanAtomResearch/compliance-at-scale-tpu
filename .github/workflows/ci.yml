@@ -48,7 +48,16 @@ jobs:
             05_trajectory_eval/bands.py \
             05_trajectory_eval/freeze.py \
             05_trajectory_eval/batch_trajectory_eval.py \
-            05_trajectory_eval/score.py
+            05_trajectory_eval/score.py \
+            06_misreported_state_torchtpu/lab05.py \
+            06_misreported_state_torchtpu/labels.py \
+            06_misreported_state_torchtpu/build_review_files.py \
+            06_misreported_state_torchtpu/student_set.py \
+            06_misreported_state_torchtpu/run.py \
+            06_misreported_state_torchtpu/parity.py \
+            06_misreported_state_torchtpu/compare_readers.py \
+            06_misreported_state_torchtpu/bridge.py \
+            06_misreported_state_torchtpu/rehearsal.py
 
       - name: Shellcheck on bash scripts
         uses: ludeeus/action-shellcheck@2.0.0

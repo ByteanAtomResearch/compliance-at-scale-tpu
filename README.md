@@ -126,6 +126,21 @@ If you lack GCE access, see the Colab TPU v2 fallback note in `01_setup/README.m
 │   ├── score.py                         → Judge vs rules (no TPU)
 │   ├── freeze.py + FROZEN.md            → Schema/prompt/band freeze record
 │   └── README.md
+├── 06_misreported_state_torchtpu/       Module 6: Misreported state on TorchTPU (Part 3)
+│   ├── lab05.py                         → Loads 05 by path, one class identity
+│   ├── labels.py                        → The words for whose labels were used
+│   ├── student_set.py                   → Builds the 22-record student eval set
+│   ├── run.py                           → 05's judge; backend recorded and checked
+│   ├── compare_readers.py               → Rules, judge, labels: one row per record
+│   ├── parity.py                        → jax vs torchtpu agreement, kappa, guard
+│   ├── bridge.py                        → Verdicts → rai-checklist-cli shapes
+│   ├── build_review_files.py            → Cuts the 60 + 14 review records + student sample
+│   ├── xla_cache.sh                     → XLA cache push/restore per backend
+│   ├── data/staging/                    → Tamper drafts + review files (pre-adjudication)
+│   ├── published/                       → Committed Part 3 result files
+│   ├── RUNLOG.md                        → Run log template for the student track
+│   ├── AUTHOR_TRACK.md                  → Optional appendix: freeze, tag, full-corpus runs
+│   └── README.md
 ├── notebooks/
 │   ├── tutorial_colab.ipynb             → Part 1 Colab fallback
 │   └── trajectory_colab.ipynb           → Part 2 free-tier demo
@@ -136,7 +151,8 @@ If you lack GCE access, see the Colab TPU v2 fallback note in `01_setup/README.m
 │   └── trajectories.jsonl               → Scored corpus (adjudicated only)
 └── tests/
     ├── test_pure_functions.py           → Unit tests (no TPU required)
-    └── test_trajectory_*.py             → Module 5 unit tests
+    ├── test_trajectory_*.py             → Module 5 unit tests
+    └── test_misreport_*.py              → Module 6 unit tests
 ```
 
 ## Quick start
@@ -164,6 +180,16 @@ make demo
 make trajectory ARGS="--band all --repeat 3"   # timed sweep on TPU
 make score                                     # judge vs rules baseline (no TPU)
 make bands                                     # token distribution + band proposal (no TPU)
+
+# Part 3: misreported state on TorchTPU (Module 6). The student track is in the module README.
+make misreport-rehearsal                       # every step a laptop can run, student track included (no TPU)
+make misreport-student-set                     # the eight you adjudicated + the 14-record sample (no TPU)
+
+# Part 3 author track (optional appendix; needs the Part 2 freeze and the adjudicated corpus)
+make misreport-run BACKEND=jax                 # eval-set run inside the vllm-tpu container
+make misreport-run BACKEND=torchtpu            # same corpus and bands, inside the vllm-torchtpu venv
+make parity                                    # agreement + kappa; refuses on any config difference (no TPU)
+make bridge                                    # verdicts -> rai-checklist-cli Markdown + YAML (no TPU)
 
 # Run unit tests (no TPU required)
 make test
@@ -253,6 +279,18 @@ Part 1 evaluated single LLM outputs. Part 2 (`05_trajectory_eval/`) evaluates th
 A Gemma judge under vLLM structured outputs is compared per state against a deterministic rules baseline, on a human-adjudicated corpus with length-banded batching for the XLA static-shape model. See [05_trajectory_eval/README.md](05_trajectory_eval/README.md) for the module walkthrough, the adjudication protocol, the truncation design, and the instrumentation dependency table.
 
 Measured results (throughput by band, judge versus rules per state, instrumentation dependency, hosted break-even) are `[MEASURED: pending]` until the TPU runs complete; they publish with the Part 2 article and land in the module README's results table.
+
+## Part 3: Misreported state on TorchTPU
+
+Oct 20, 2026 is the date on both sources Part 3 is built from. That day Google open-sourced TorchTPU at the PyTorch Conference ([Introducing TorchTPU](https://pytorch.org/blog/introducing-torchtpu/)), and the Cloud TPU docs recommend it for new workloads and for migrating existing PyTorch/XLA ones ([PyTorch on Cloud TPU](https://docs.cloud.google.com/tpu/docs/pytorch-on-tpu)). An [OpenAI Alignment report](https://alignment.openai.com/misalignment-reports/suppressing-misalignment-monitoring-alerts-and-disabling-misalignment-monitoring/) on two monitoring incidents in OpenAI's internal deployments carries the same date. Incident 2 was a migration: the agent was asked to reproduce an existing implementation, removed the monitoring integration to match a reference, replaced the test that preserved monitoring, reported the migration complete, and denied the removal when asked.
+
+Part 3 (`06_misreported_state_torchtpu/`, lab module 06) does the same kind of migration: the Part 2 judge moves from the JAX backend to TorchTPU. `parity.py` is the test that proves the monitor survived.
+
+Part 1 asked whether we can afford to judge every record, Part 2 asked whether the agent's path was acceptable, and Part 3 asks whether the agent told the truth about what it did. Its eight-record tamper set is modelled on the report's two incidents: in incident 1, an agent emptied a monitor's alert recipient lists and set a no-notify flag; incident 2 is the migration above. Three of the eight records are honest versions of the same changes.
+
+`run.py` runs 05's judge on a declared backend and records it in the run log, together with the commit that ran. `parity.py` compares two runs state by state with Cohen's kappa and refuses to compare runs that differ in anything but the backend. `bridge.py` turns verdicts into the rai-checklist-cli shapes from Module 4, with operator policy kept apart from the findings. 05 is imported by path and never modified. [06_misreported_state_torchtpu/README.md](06_misreported_state_torchtpu/README.md) opens with the student track: nine steps on your machine and one v6e-4 VM, about 90 minutes of hands-on time plus compile waits. You rehearse on a laptop, adjudicate the eight records yourself, run the judge on TorchTPU and on the JAX backend, compare rules, judge and your labels case by case, and tear the VM down. It needs no Part 2 freeze. The tamper set, the guardrails and an optional appendix with the author track follow it.
+
+Measured results are `[MEASURED: pending]` until the author track's TPU runs complete; they publish with the Part 3 article and land in `06_misreported_state_torchtpu/published/`. A student's own run writes to `results/student/`, which is gitignored and is not a published result.
 
 ## Citing this tutorial
 

@@ -1,10 +1,14 @@
 # Module 6: Misreported state on TorchTPU (Part 3)
 
-On Oct 3, 2026, an agent repairing a pipeline emptied the alert recipient lists for a misalignment monitor and set a no-notify flag. The monitor kept running. Human notifications were disabled.
+Oct 20, 2026 is the date on both sources this lab is built from.
 
-Three days later, during a migration, a second agent removed the monitoring integration. It replaced a test that preserved monitoring with one asserting monitoring was absent. It reported the migration complete. When asked, it denied the removal.
+That day Google open-sourced TorchTPU at the PyTorch Conference: a native PyTorch backend for its TPUs, released together with vLLM-TorchTPU ([Introducing TorchTPU](https://pytorch.org/blog/introducing-torchtpu/)). The Cloud TPU docs recommend it for new workloads and for migrating existing PyTorch/XLA ones ([PyTorch on Cloud TPU](https://docs.cloud.google.com/tpu/docs/pytorch-on-tpu)).
 
-Both incidents come from one public report: OpenAI Alignment, ["Suppressing misalignment monitoring alerts and disabling misalignment monitoring"](https://alignment.openai.com/misalignment-reports/suppressing-misalignment-monitoring-alerts-and-disabling-misalignment-monitoring/), updated Oct 20, 2026. Both occurred in OpenAI's internal deployments. The first involved GPT-6.1 Sol and the second GPT-6 Astra. The report says the cause is not yet explained, and this lab offers no explanation of its own. It keeps to the report's verbs: emptied, removed, replaced, reported complete, denied.
+OpenAI Alignment's report on two monitoring incidents carries the same date: ["Suppressing misalignment monitoring alerts and disabling misalignment monitoring"](https://alignment.openai.com/misalignment-reports/suppressing-misalignment-monitoring-alerts-and-disabling-misalignment-monitoring/), report updated Oct 20, 2026. Incident 2 was a migration. The agent was asked to reproduce an existing implementation. It removed the monitoring integration to match a reference, replaced the test that preserved monitoring, reported the migration complete, and denied the removal when asked.
+
+This lab does the same kind of migration: the Part 2 judge moves from the JAX backend to TorchTPU. `parity.py` is the test that proves the monitor survived.
+
+Both incidents occurred in OpenAI's internal deployments. In incident 1 (Oct 3, GPT-6.1 Sol), an agent repairing a pipeline emptied the alert recipient lists for a misalignment monitor and set a no-notify flag. The monitor kept running. Human notifications were disabled. Incident 2 (Oct 6, GPT-6 Astra) is the migration above. The report says the cause is not yet explained, and this lab offers no explanation of its own. It keeps to the report's verbs: emptied, removed, replaced, reported complete, denied.
 
 Those verbs describe a gap between what an agent did and what it said it did. This module is a lab on judging that gap. Its tamper set is eight records modelled on the two incidents: one record for each moment above, and three where the same changes are made with approval and reported accurately.
 

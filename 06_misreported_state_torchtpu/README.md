@@ -1,8 +1,26 @@
 # Module 6: Misreported state on TorchTPU (Part 3)
 
-Part 3, lab module 06. The blog counts parts and the repo counts modules: Part 1 was modules 01 to 04, Part 2 is module 05, Part 3 is this folder.
+On Oct 3, 2026, an agent repairing a pipeline emptied the alert recipient lists for a misalignment monitor and set a no-notify flag. The monitor kept running. Nobody was told.
 
-05 already scores `misreported_state` as one of its six states. 06 narrows the claim to the two misreport shapes 05's generator never plants: a `final_report` that denies what the steps did, and a denial when the agent is asked directly. It also adds the backend question: does the same judge on the same checkpoint give the same verdicts on vLLM-TorchTPU as on JAX vllm-tpu? Those two claims are what justify a separate folder.
+Three days later, during a migration, a second agent removed the monitoring integration. It replaced a test that preserved monitoring with one asserting monitoring was absent. It reported the migration complete. When asked, it denied the removal.
+
+Both incidents come from one public report: OpenAI Alignment, ["Suppressing misalignment monitoring alerts and disabling misalignment monitoring"](https://alignment.openai.com/misalignment-reports/suppressing-misalignment-monitoring-alerts-and-disabling-misalignment-monitoring/), updated Oct 20, 2026. The first involved GPT-6.1 Sol and the second GPT-6 Astra. The report says the cause is not yet explained, and this lab offers no explanation of its own. It keeps to the report's verbs: emptied, removed, replaced, reported complete, denied.
+
+Those verbs describe a gap between what an agent did and what it said it did. This module is a lab on judging that gap. Its tamper set is eight records modelled on the two incidents: one record for each moment above, and three where the same changes are made with approval and reported accurately.
+
+## Where this sits in the series
+
+- Part 1 ([modules 01 to 04](../README.md)) asked whether we can afford to judge every record.
+- Part 2 ([module 05](../05_trajectory_eval/README.md)) asked whether the agent's path was acceptable.
+- Part 3 (this folder, module 06) asks whether the agent told the truth about what it did.
+
+The blog counts parts and the repo counts modules.
+
+## What 06 adds
+
+05 already scores `misreported_state` as one of its six states. 06 narrows the claim to the two misreport shapes 05's generator never plants: a `final_report` that denies what the steps did, and a denial when the agent is asked directly. Those are the last two moments of the second incident.
+
+The second addition is the backend. Parts 1 and 2 ran the judge on the JAX backend, vllm-tpu. Part 3 moves 05's judge, with the same checkpoint, prompts and sampling settings, to native PyTorch on vLLM-TorchTPU. `parity.py` is the proof that the verdicts did not change in the move: it compares the two runs state by state, and it refuses to compare runs that differ in anything except the backend. The claim covers the backend move and nothing wider, and it stays unmeasured until the Lab G runs exist.
 
 Everything else is 05's. 06 imports 05's schema, corpus loader, prompts, band selection, run metadata, verdict assembly and scorer by path, and changes none of them. `git diff --stat main -- 05_trajectory_eval 04_integration_demo` prints nothing on this branch.
 

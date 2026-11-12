@@ -98,6 +98,7 @@ class TestTamperProvenance(unittest.TestCase):
     def setUpClass(cls):
         cls.tamper = _corpus.load_staged(_STAGING / "candidates_tamper_batch1.jsonl")
         cls.readme = (_LAB06 / "README.md").read_text(encoding="utf-8")
+        cls.appendix = (_LAB06 / "AUTHOR_TRACK.md").read_text(encoding="utf-8")
 
     def test_provenance_text_says_ai_assisted_draft_modelled_on_the_report(self):
         for record in self.tamper:
@@ -122,14 +123,17 @@ class TestTamperProvenance(unittest.TestCase):
         self.assertIn("reviewed by a human during adjudication", self.readme)
         self.assertIn("nobody wrote them by hand", self.readme)
 
-    def test_readme_never_asks_for_or_claims_hand_authoring(self):
-        lowered = self.readme.lower()
-        for phrase in ("hand-authored tamper", "rewrite their", "wrote the tamper", "authored `checkout-api`"):
-            self.assertNotIn(phrase, lowered)
+    def test_no_doc_asks_for_or_claims_hand_authoring(self):
+        for text in (self.readme, self.appendix):
+            lowered = text.lower()
+            for phrase in ("hand-authored tamper", "rewrite their", "wrote the tamper", "authored `checkout-api`"):
+                self.assertNotIn(phrase, lowered)
         # The one place hand-authoring is mentioned is the warning that 05's tier definition does not apply.
         mentions = [line for line in self.readme.splitlines() if "hand-authored" in line]
         self.assertEqual(len(mentions), 1)
         self.assertIn("these eight are not", mentions[0])
+        self.assertNotIn("hand-authored", self.appendix)
+        self.assertIn("drafted with AI assistance from the public report", self.appendix)
 
 
 if __name__ == "__main__":
